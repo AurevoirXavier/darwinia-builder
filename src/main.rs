@@ -41,7 +41,7 @@ lazy_static! {
 		.version("1.0")
 		.arg(
 			Arg::with_name("host")
-				.help("the HOST to build")
+				.help("The HOST to build")
 				.long("host")
 				.value_name("HOST")
 				.possible_values(&[
@@ -55,7 +55,7 @@ lazy_static! {
 		)
 		.arg(
 			Arg::with_name("target")
-				.help("the TARGET to run")
+				.help("The TARGET to run")
 				.long("target")
 				.value_name("TARGET")
 				.possible_values(&[
@@ -72,12 +72,12 @@ lazy_static! {
 		.arg(
 			Arg::with_name("release")
 				.long("release")
-				.help("build darwinia in release mode")
+				.help("Build darwinia in release mode")
 		)
 		.arg(
 			Arg::with_name("wasm")
 				.long("wasm")
-				.help("also build wasm in release mode")
+				.help("Also build wasm in release mode")
 		)
 		.get_matches();
 }
@@ -105,13 +105,15 @@ impl Builder {
 
 	fn check(&self) -> bool {
 		let Builder {
-			tool: Tool {
-				rustup,
-				cargo,
-				toolchain,
-				wasm_target,
-				run_target,
-			},
+			tool:
+				Tool {
+					rustup,
+					cargo,
+					toolchain,
+					wasm_target,
+					wasm_gc,
+					run_target,
+				},
 			env_var:
 				EnvVar {
 					target_cc,
@@ -122,24 +124,33 @@ impl Builder {
 				},
 		} = self;
 
-		![
-			rustup,
-			cargo,
-			toolchain,
-			wasm_target,
-			run_target,
-			target_cc,
-			sysroot,
-			openssl_include_dir,
-			openssl_lib_dir,
-			rocksdb_lib_dir,
-		]
-		.iter()
-		.any(|&s| s.is_empty())
+		if APP.is_present("target") {
+			![
+				rustup,
+				cargo,
+				toolchain,
+				wasm_target,
+				wasm_gc,
+				run_target,
+				target_cc,
+				sysroot,
+				openssl_include_dir,
+				openssl_lib_dir,
+				rocksdb_lib_dir,
+			]
+			.iter()
+			.any(|&s| s.is_empty())
+		} else {
+			![rustup, cargo, toolchain, wasm_target, wasm_gc, run_target]
+				.iter()
+				.any(|&s| s.is_empty())
+		}
 	}
 
 	fn build(self) -> Result<(), io::Error> {
-		self.build_wasm()?;
+		if APP.is_present("wasm") {
+			self.build_wasm()?;
+		}
 		self.build_darwinia()?;
 
 		Ok(())
@@ -150,7 +161,7 @@ impl Builder {
 
 		{
 			let mut wasm_path = root_path.clone();
-			wasm_path.push("node/run/time/wasm");
+			wasm_path.push("node/runtime/wasm");
 			env::set_current_dir(&wasm_path)?;
 		}
 
@@ -207,14 +218,6 @@ impl Builder {
 
 		run_with_output(&mut build_command)?;
 
-		if APP.is_present("target") {
-			env::remove_var("TARGET_CC");
-			env::remove_var("SYSROOT");
-			env::remove_var("OPENSSL_INCLUDE_DIR");
-			env::remove_var("OPENSSL_LIB_DIR");
-			env::remove_var("ROCKSDB_LIB_DIR");
-		}
-
 		Ok(())
 	}
 }
@@ -261,6 +264,7 @@ struct Tool {
 	cargo: String,
 	toolchain: String,
 	wasm_target: String,
+	wasm_gc: String,
 	run_target: String,
 }
 
@@ -272,6 +276,7 @@ impl Tool {
 			cargo: String::new(),
 			toolchain: format!("nightly-{}-{}", STABLE_TOOLCHAIN_VERSION, host),
 			wasm_target: String::from("wasm32-unknown-unknown"),
+			wasm_gc: String::new(),
 			run_target: APP.value_of("target").unwrap_or(host).to_owned(),
 		};
 
@@ -283,9 +288,7 @@ impl Tool {
 				{
 					let toolchain_list =
 						run(Command::new("rustup").args(&["toolchain", "list"])).unwrap();
-					if toolchain_list.contains(&tool.toolchain) {
-						println!("{} {}", "[✓] toolchain:".green(), tool.toolchain.cyan());
-					} else {
+					if !toolchain_list.contains(&tool.toolchain) {
 						eprintln!("{} {}", "[✗] toolchain:".red(), tool.toolchain.red());
 
 						run_with_output(Command::new("rustup").args(&[
@@ -294,9 +297,9 @@ impl Tool {
 							&tool.toolchain,
 						]))
 						.unwrap();
-
-						println!("{} {}", "[✓] toolchain:".green(), tool.toolchain.cyan());
 					}
+
+					println!("{} {}", "[✓] toolchain:".green(), tool.toolchain.cyan());
 				}
 
 				{
@@ -324,9 +327,7 @@ impl Tool {
 						(&tool.run_target, run_target_installed),
 						(&tool.wasm_target, wasm_target_installed),
 					] {
-						if target_installed {
-							println!("{} {}", "[✓] target:".green(), target.cyan());
-						} else {
+						if !target_installed {
 							eprintln!("{} {}", "[✗] target:".red(), target.red());
 
 							run_with_output(Command::new("rustup").args(&[
@@ -337,10 +338,34 @@ impl Tool {
 								&tool.toolchain,
 							]))
 							.unwrap();
+						}
 
-							println!("{} {}", "[✓] target:".green(), target.cyan());
+						println!("{} {}", "[✓] target:".green(), target.cyan());
+					}
+				}
+
+				{
+					if let Err(e) = run(Command::new("wasm-gc").arg("--help")) {
+						if e.kind() == io::ErrorKind::NotFound {
+							eprintln!(
+								"{} {}",
+								"[✗] wasm-gc:".red(),
+								"https://github.com/alexcrichton/wasm-gc".red()
+							);
+
+							run_with_output(Command::new("cargo").args(&[
+								"install",
+								"--git",
+								"https://github.com/alexcrichton/wasm-gc",
+							]))
+							.unwrap();
+						} else {
+							panic!("{}", e);
 						}
 					}
+
+					tool.wasm_gc = String::from("https://github.com/alexcrichton/wasm-gc");
+					println!("{} {}", "[✓] wasm-gc:".green(), tool.wasm_gc.cyan());
 				}
 			}
 			Err(e) => {
@@ -371,7 +396,6 @@ struct EnvVar {
 
 impl EnvVar {
 	fn new() -> Self {
-		let host = APP.value_of("host").unwrap_or(HOST.as_str());
 		let mut target_cc = String::new();
 		let mut sysroot = String::new();
 		let mut openssl_include_dir = String::new();
@@ -379,92 +403,92 @@ impl EnvVar {
 		let mut rocksdb_lib_dir = String::new();
 		let mut dir = env::current_dir().unwrap();
 
-		if APP.value_of("target").is_some() {
-			// TODO
-			match APP.value_of("target").unwrap_or(host) {
-				"arm-unknown-linux-gnueabi" => unimplemented!(),
-				"armv7-unknown-linux-gnueabihf" => unimplemented!(),
-				"i686-apple-darwin" => unimplemented!(),
-				"x86_64-apple-darwin" => unimplemented!(),
-				"i686-unknown-linux-gnu" => unimplemented!(),
-				"x86_64-unknown-linux-gnu" => {
-					match run(Command::new("x86_64-unknown-linux-gnu-gcc").arg("--version")) {
-						Ok(version) => {
-							target_cc = version.splitn(2, '\n').next().unwrap().to_owned();
-							println!(
-								"{} {}",
-								"[✓] x86_64-unknown-linux-gnu-gcc:".green(),
-								target_cc.cyan()
-							);
-						}
-						Err(e) => {
-							if e.kind() == io::ErrorKind::NotFound {
-								eprintln!(
-									"{} {}",
-									"[✗] x86_64-unknown-linux-gnu-gcc:".red(),
-									"https://github.com/SergioBenitez/homebrew-osxct".red()
-								);
-							} else {
-								panic!("{}", e);
-							}
-						}
-					}
+		if !APP.is_present("target") {
+			return Self {
+				target_cc,
+				sysroot,
+				openssl_include_dir,
+				openssl_lib_dir,
+				rocksdb_lib_dir,
+			};
+		}
 
-					dir.push("linux-x86_64");
-
-					if dir.exists() {
+		// TODO
+		match APP.value_of("target").unwrap() {
+			"arm-unknown-linux-gnueabi" => unimplemented!(),
+			"armv7-unknown-linux-gnueabihf" => unimplemented!(),
+			"i686-apple-darwin" => unimplemented!(),
+			"x86_64-apple-darwin" => unimplemented!(),
+			"i686-unknown-linux-gnu" => unimplemented!(),
+			"x86_64-unknown-linux-gnu" => {
+				match run(Command::new("x86_64-unknown-linux-gnu-gcc").arg("--version")) {
+					Ok(version) => {
+						target_cc = version.splitn(2, '\n').next().unwrap().to_owned();
 						println!(
 							"{} {}",
-							"[✓] linux-x86_64:".green(),
-							dir.to_string_lossy().cyan()
+							"[✓] x86_64-unknown-linux-gnu-gcc:".green(),
+							target_cc.cyan()
 						);
-					} else {
-						eprintln!(
+					}
+					Err(e) => {
+						if e.kind() == io::ErrorKind::NotFound {
+							eprintln!(
+								"{} {}",
+								"[✗] x86_64-unknown-linux-gnu-gcc:".red(),
+								"https://github.com/SergioBenitez/homebrew-osxct".red()
+							);
+						} else {
+							panic!("{}", e);
+						}
+					}
+				}
+
+				dir.push("linux-x86_64");
+
+				if dir.exists() {
+					println!(
+						"{} {}",
+						"[✓] linux-x86_64:".green(),
+						dir.to_string_lossy().cyan()
+					);
+				} else {
+					eprintln!(
 							"{} {}",
 							"[✗] linux-x86_64:".red(),
 							"https://github.com/AurevoirXavier/darwinia-builder/releases/download/v0.2.0/linux-x86_64.tar.gz".red()
 						);
-						eprintln!("{}", "[✗] SYSROOT".red(),);
-						eprintln!("{}", "[✗] OPENSSL_INCLUDE_DIR".red(),);
-						eprintln!("{}", "[✗] OPENSSL_LIB_DIR".red(),);
-						eprintln!("{}", "[✗] ROCKSDB_LIB_DIR".red(),);
-
-						return Self {
-							target_cc,
-							sysroot,
-							openssl_include_dir,
-							openssl_lib_dir,
-							rocksdb_lib_dir,
-						};
-					}
 				}
-				"i686-pc-windows-msvc" => unimplemented!(),
-				"x86_64-pc-windows-msvc" => unimplemented!(),
-				_ => unreachable!(),
 			}
+			"i686-pc-windows-msvc" => unimplemented!(),
+			"x86_64-pc-windows-msvc" => unimplemented!(),
+			_ => unreachable!(),
+		}
 
-			for (k, v, folder) in [
-				("SYSROOT", &mut sysroot, "sysroot"),
-				("OPENSSL_INCLUDE_DIR", &mut openssl_include_dir, "include"),
-				("OPENSSL_LIB_DIR", &mut openssl_lib_dir, "lib/openssl"),
-				("ROCKSDB_LIB_DIR", &mut rocksdb_lib_dir, "lib/rocksdb"),
-			]
-			.iter_mut()
-			{
-				if let Ok(v_) = env::var(*k) {
-					**v = v_;
-				} else {
-					let mut dir = dir.clone();
-					dir.push(*folder);
+		for (k, v, folder) in [
+			("SYSROOT", &mut sysroot, "sysroot"),
+			("OPENSSL_INCLUDE_DIR", &mut openssl_include_dir, "include"),
+			("OPENSSL_LIB_DIR", &mut openssl_lib_dir, "lib/openssl"),
+			("ROCKSDB_LIB_DIR", &mut rocksdb_lib_dir, "lib/rocksdb"),
+		]
+		.iter_mut()
+		{
+			if let Ok(v_) = env::var(*k) {
+				**v = v_;
+			} else {
+				let mut dir = dir.clone();
+				dir.push(*folder);
+				if dir.as_path().is_dir() {
 					**v = dir.to_string_lossy().to_string();
+					println!(
+						"{} {}{} {}",
+						"[✓]".green(),
+						(*k).green(),
+						":".green(),
+						v.cyan()
+					);
+				} else {
+					eprintln!("{} {}", "[✗]".red(), (*k).red());
 				}
-				println!(
-					"{} {}{} {}",
-					"[✓]".green(),
-					(*k).green(),
-					":".green(),
-					v.cyan()
-				);
 			}
 		}
 
