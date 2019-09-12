@@ -218,6 +218,15 @@ impl Builder {
 
 		run_with_output(&mut build_command)?;
 
+		if APP.is_present("target") {
+			env::remove_var("CARGO_INCREMENTAL");
+			env::remove_var("TARGET_CC");
+			env::remove_var("SYSROOT");
+			env::remove_var("OPENSSL_INCLUDE_DIR");
+			env::remove_var("OPENSSL_LIB_DIR");
+			env::remove_var("ROCKSDB_LIB_DIR");
+		}
+
 		Ok(())
 	}
 }
@@ -283,7 +292,9 @@ impl Tool {
 		match run(Command::new("rustup").arg("--version")) {
 			Ok(version) => {
 				tool.rustup = version;
+				println!("{} {}", "[✓] rustup:".green(), tool.rustup.cyan());
 				tool.cargo = run(Command::new("cargo").arg("--version")).unwrap();
+				println!("{} {}", "[✓] cargo:".green(), tool.cargo.cyan());
 
 				{
 					let toolchain_list =
