@@ -153,6 +153,7 @@ impl Builder {
 			wasm_path.push("node/run/time/wasm");
 			env::set_current_dir(&wasm_path)?;
 		}
+
 		env::set_var("CARGO_INCREMENTAL", "0");
 
 		run_with_output(Command::new("cargo").args(&[
@@ -161,6 +162,7 @@ impl Builder {
 			"--release",
 			"--target",
 			"wasm32-unknown-unknown",
+			"--",
 			"-C",
 			"link-arg=--export-table",
 		]))?;
