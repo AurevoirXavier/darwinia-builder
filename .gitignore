@@ -2,4 +2,7 @@
 **/*.rs.bk
 
 .idea
+.vscode
 .DS_Store
+
+linux-x86_64
