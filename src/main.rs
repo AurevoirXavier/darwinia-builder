@@ -325,13 +325,11 @@ struct EnvVar {
 impl EnvVar {
 	fn new() -> Self {
 		let host = APP.value_of("host").unwrap_or(HOST.as_str());
-		let mut env_var = Self {
-			target_cc: String::new(),
-			sysroot: String::new(),
-			openssl_include_dir: String::new(),
-			openssl_lib_dir: String::new(),
-			rocksdb_lib_dir: String::new(),
-		};
+		let mut target_cc = String::new();
+		let mut sysroot = String::new();
+		let mut openssl_include_dir = String::new();
+		let mut openssl_lib_dir = String::new();
+		let mut rocksdb_lib_dir = String::new();
 		let mut dir = env::current_dir().unwrap();
 
 		if APP.value_of("target").is_some() {
@@ -345,11 +343,11 @@ impl EnvVar {
 				"x86_64-unknown-linux-gnu" => {
 					match run(Command::new("x86_64-unknown-linux-gnu-gcc").arg("--version")) {
 						Ok(version) => {
-							env_var.target_cc = version.splitn(2, '\n').next().unwrap().to_owned();
+							target_cc = version.splitn(2, '\n').next().unwrap().to_owned();
 							println!(
 								"{} {}",
 								"[✓] x86_64-unknown-linux-gnu-gcc:".green(),
-								env_var.target_cc.cyan()
+								target_cc.cyan()
 							);
 						}
 						Err(e) => {
@@ -384,7 +382,13 @@ impl EnvVar {
 						eprintln!("{}", "[✗] OPENSSL_LIB_DIR".red(),);
 						eprintln!("{}", "[✗] ROCKSDB_LIB_DIR".red(),);
 
-						return env_var;
+						return Self {
+							target_cc,
+							sysroot,
+							openssl_include_dir,
+							openssl_lib_dir,
+							rocksdb_lib_dir,
+						};
 					}
 				}
 				"i686-pc-windows-msvc" => unimplemented!(),
@@ -392,40 +396,38 @@ impl EnvVar {
 				_ => unreachable!(),
 			}
 
-			dir.push("sysroot");
-			env_var.sysroot = dir.to_string_lossy().to_string();
-			println!("{} {}", "[✓] SYSROOT:".green(), env_var.sysroot.cyan());
-
-			dir.pop();
-			dir.push("include");
-			env_var.openssl_include_dir = dir.to_string_lossy().to_string();
-			println!(
-				"{} {}",
-				"[✓] OPENSSL_INCLUDE_DIR:".green(),
-				env_var.openssl_include_dir.cyan()
-			);
-
-			dir.pop();
-			dir.push("lib/openssl");
-			env_var.openssl_lib_dir = dir.to_string_lossy().to_string();
-			println!(
-				"{} {}",
-				"[✓] OPENSSL_LIB_DIR:".green(),
-				env_var.openssl_lib_dir.cyan()
-			);
-
-			dir.pop();
-			dir.pop();
-			dir.push("lib/rocksdb");
-			env_var.rocksdb_lib_dir = dir.to_string_lossy().to_string();
-			println!(
-				"{} {}",
-				"[✓] ROCKSDB_LIB_DIR:".green(),
-				env_var.rocksdb_lib_dir.cyan()
-			);
+			for (k, v, folder) in [
+				("SYSROOT", &mut sysroot, "sysroot"),
+				("OPENSSL_INCLUDE_DIR", &mut openssl_include_dir, "include"),
+				("OPENSSL_LIB_DIR", &mut openssl_lib_dir, "lib/openssl"),
+				("ROCKSDB_LIB_DIR", &mut rocksdb_lib_dir, "lib/rocksdb"),
+			]
+			.iter_mut()
+			{
+				if let Ok(v_) = env::var(*k) {
+					**v = v_;
+				} else {
+					let mut dir = dir.clone();
+					dir.push(*folder);
+					**v = dir.to_string_lossy().to_string();
+				}
+				println!(
+					"{} {}{} {}",
+					"[✓]".green(),
+					(*k).green(),
+					":".green(),
+					v.cyan()
+				);
+			}
 		}
 
-		env_var
+		Self {
+			target_cc,
+			sysroot,
+			openssl_include_dir,
+			openssl_lib_dir,
+			rocksdb_lib_dir,
+		}
 	}
 }
 
