@@ -464,10 +464,10 @@ impl EnvVar {
 					);
 				} else {
 					eprintln!(
-							"{} {}",
-							"[✗] linux-x86_64:".red(),
-							"https://github.com/AurevoirXavier/darwinia-builder/releases/download/v0.2.0-alpha/linux-x86_64.tar.gz".red()
-						);
+						"{} {}",
+						"[✗] linux-x86_64:".red(),
+						"https://github.com/AurevoirXavier/darwinia-builder/releases/download/v0.2.0-alpha/linux-x86_64.tar.gz".red()
+					);
 				}
 			}
 			"i686-pc-windows-msvc" => unimplemented!(),
