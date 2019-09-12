@@ -72,7 +72,12 @@ lazy_static! {
 		.arg(
 			Arg::with_name("release")
 				.long("release")
-				.help("build in release mode")
+				.help("build darwinia in release mode")
+		)
+		.arg(
+			Arg::with_name("wasm")
+				.long("wasm")
+				.help("also build wasm in release mode")
 		)
 		.get_matches();
 }
@@ -80,7 +85,7 @@ lazy_static! {
 fn main() {
 	let builder = Builder::new();
 	if builder.check() {
-		builder.build();
+		builder.build().unwrap();
 	}
 }
 
@@ -133,7 +138,44 @@ impl Builder {
 		.any(|&s| s.is_empty())
 	}
 
-	fn build(self) {
+	fn build(self) -> Result<(), io::Error> {
+		self.build_wasm()?;
+		self.build_darwinia()?;
+
+		Ok(())
+	}
+
+	fn build_wasm(&self) -> Result<(), io::Error> {
+		let root_path = env::current_dir()?;
+
+		{
+			let mut wasm_path = root_path.clone();
+			wasm_path.push("node/run/time/wasm");
+			env::set_current_dir(&wasm_path)?;
+		}
+		env::set_var("CARGO_INCREMENTAL", "0");
+
+		run_with_output(Command::new("cargo").args(&[
+			&format!("+{}", self.tool.toolchain),
+			"rustc",
+			"--release",
+			"--target",
+			"wasm32-unknown-unknown",
+			"-C",
+			"link-arg=--export-table",
+		]))?;
+
+		run(Command::new("wasm-gc").args(&[
+			"target/wasm32-unknown-unknown/release/node_runtime.wasm",
+			"target/wasm32-unknown-unknown/release/node_runtime.compact.wasm",
+		]))?;
+
+		env::set_current_dir(&root_path)?;
+
+		Ok(())
+	}
+
+	fn build_darwinia(&self) -> Result<(), io::Error> {
 		let mut build_command = Command::new("cargo");
 		build_command.args(&[&format!("+{}", self.tool.toolchain), "rustc"]);
 
@@ -142,6 +184,7 @@ impl Builder {
 		}
 
 		if let Some(target) = APP.value_of("target") {
+			env::set_var("CARGO_INCREMENTAL", "1");
 			env::set_var(
 				"TARGET_CC",
 				self.env_var.target_cc.splitn(2, ' ').next().unwrap(),
@@ -160,7 +203,7 @@ impl Builder {
 			]);
 		}
 
-		run_with_output(&mut build_command).unwrap();
+		run_with_output(&mut build_command)?;
 
 		if APP.is_present("target") {
 			env::remove_var("TARGET_CC");
@@ -169,6 +212,8 @@ impl Builder {
 			env::remove_var("OPENSSL_LIB_DIR");
 			env::remove_var("ROCKSDB_LIB_DIR");
 		}
+
+		Ok(())
 	}
 }
 
