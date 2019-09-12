@@ -38,7 +38,7 @@ lazy_static! {
 	static ref APP: ArgMatches<'static> = App::new("darwinia-builder")
 		.author("Xavier Lau <c.estlavie@icloud.com>")
 		.about("build tool for darwinia")
-		.version("1.0")
+		.version("0.3.0-alpha")
 		.arg(
 			Arg::with_name("host")
 				.help("The HOST to build")
