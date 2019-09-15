@@ -1,11 +1,14 @@
 extern crate clap;
 extern crate colored;
+extern crate dirs;
 #[macro_use]
 extern crate lazy_static;
 
 // --- std ---
 use std::{
-	env, fmt, io,
+	env, fmt,
+	fs::{self, File, OpenOptions},
+	io::{self, Read, Write},
 	process::{Command, Stdio},
 };
 // --- external ---
@@ -38,7 +41,7 @@ lazy_static! {
 	static ref APP: ArgMatches<'static> = App::new("darwinia-builder")
 		.author("Xavier Lau <c.estlavie@icloud.com>")
 		.about("build tool for darwinia")
-		.version("0.3.0-alpha")
+		.version("0.4.0-alpha")
 		.arg(
 			Arg::with_name("host")
 				.help("The HOST to build")
@@ -116,6 +119,7 @@ impl Builder {
 				},
 			env_var:
 				EnvVar {
+					config_file,
 					target_cc,
 					sysroot,
 					openssl_include_dir,
@@ -132,6 +136,7 @@ impl Builder {
 				wasm_target,
 				wasm_gc,
 				run_target,
+				config_file,
 				target_cc,
 				sysroot,
 				openssl_include_dir,
@@ -398,6 +403,7 @@ impl Tool {
 
 #[derive(Debug)]
 struct EnvVar {
+	config_file: String,
 	target_cc: String,
 	sysroot: String,
 	openssl_include_dir: String,
@@ -407,6 +413,7 @@ struct EnvVar {
 
 impl EnvVar {
 	fn new() -> Self {
+		let mut config_file = String::new();
 		let mut target_cc = String::new();
 		let mut sysroot = String::new();
 		let mut openssl_include_dir = String::new();
@@ -416,6 +423,7 @@ impl EnvVar {
 
 		if !APP.is_present("target") {
 			return Self {
+				config_file,
 				target_cc,
 				sysroot,
 				openssl_include_dir,
@@ -423,6 +431,28 @@ impl EnvVar {
 				rocksdb_lib_dir,
 			};
 		}
+
+		let (mut config_file_handler, config) = {
+			let mut config_file_path = dirs::home_dir().unwrap();
+			config_file_path.push(".cargo");
+			if !config_file_path.as_path().is_dir() {
+				fs::create_dir(&config_file_path).unwrap();
+			}
+
+			config_file_path.push(".config");
+			if config_file_path.is_file() {
+				let mut config_file_handler = OpenOptions::new()
+					.read(true)
+					.write(true)
+					.open(&config_file_path)
+					.unwrap();
+				let mut config = String::new();
+				config_file_handler.read_to_string(&mut config).unwrap();
+				(config_file_handler, config)
+			} else {
+				(File::create(&config_file_path).unwrap(), String::new())
+			}
+		};
 
 		// TODO
 		match APP.value_of("target").unwrap() {
@@ -435,6 +465,11 @@ impl EnvVar {
 				match run(Command::new("x86_64-unknown-linux-gnu-gcc").arg("--version")) {
 					Ok(version) => {
 						target_cc = version.splitn(2, '\n').next().unwrap().to_owned();
+						config_file = format!(
+							"[target.x86_64-unknown-linux-gnu]\nlinker = \"{}\"",
+							target_cc.splitn(2, ' ').next().unwrap()
+						);
+
 						println!(
 							"{} {}",
 							"[✓] x86_64-unknown-linux-gnu-gcc:".green(),
@@ -452,6 +487,34 @@ impl EnvVar {
 							panic!("{}", e);
 						}
 					}
+				}
+
+				{
+					let mut config_unset = true;
+
+					for line in config.lines() {
+						if line.trim() == "[target.x86_64-unknown-linux-gnu]" {
+							config_unset = false;
+						}
+					}
+
+					if config_unset {
+						eprintln!(
+							"{} {}",
+							"[✗] config file:".red(),
+							"will be set automatically".red()
+						);
+					}
+
+					config_file_handler.write("\n".as_bytes()).unwrap();
+					config_file_handler.write(config_file.as_bytes()).unwrap();
+					config_file_handler.sync_all().unwrap();
+
+					println!(
+						"{} {}",
+						"[✓] config file:".green(),
+						config_file.replace('\n', " ").cyan()
+					);
 				}
 
 				dir.push("linux-x86_64");
@@ -504,6 +567,7 @@ impl EnvVar {
 		}
 
 		Self {
+			config_file,
 			target_cc,
 			sysroot,
 			openssl_include_dir,
