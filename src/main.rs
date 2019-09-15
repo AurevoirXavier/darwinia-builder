@@ -24,7 +24,7 @@ lazy_static! {
 		} else if cfg!(target_arch = "x86_64") {
 			Arch::x86_64
 		} else {
-			unreachable!("not support arch")
+			unreachable!("unsupported arch")
 		};
 		let os = if cfg!(target_os = "linux") {
 			OS::Linux
@@ -33,7 +33,7 @@ lazy_static! {
 		} else if cfg!(target_os = "windows") {
 			OS::Windows
 		} else {
-			unreachable!("not support os")
+			unreachable!("unsupported os")
 		};
 
 		format!("{}-{}", arch, os)
