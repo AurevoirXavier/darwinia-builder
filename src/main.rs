@@ -347,17 +347,17 @@ impl Tool {
 						}
 					}
 
-					for (target, target_installed) in vec![
+					for (target, target_installed) in [
 						(&tool.run_target, run_target_installed),
 						(&tool.wasm_target, wasm_target_installed),
-					] {
+					].iter() {
 						if !target_installed {
 							eprintln!("{} {}", "[✗] target:".red(), target.red());
 
 							run_with_output(Command::new("rustup").args(&[
 								"target",
 								"add",
-								&target,
+								target,
 								"--toolchain",
 								&tool.toolchain,
 							]))
