@@ -505,7 +505,9 @@ impl EnvVar {
 							"will be set automatically".red()
 						);
 
-						config_file_handler.write("\n".as_bytes()).unwrap();
+						if !config.is_empty() {
+							config_file_handler.write("\n\n".as_bytes()).unwrap();
+						}
 						config_file_handler.write(config_file.as_bytes()).unwrap();
 						config_file_handler.sync_all().unwrap();
 					}
