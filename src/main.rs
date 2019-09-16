@@ -78,6 +78,11 @@ lazy_static! {
 				.help("Build darwinia in release mode")
 		)
 		.arg(
+			Arg::with_name("verbose")
+				.long("verbose")
+				.help("Use verbose output (-vv very verbose/build.rs output) while building darwinia")
+		)
+		.arg(
 			Arg::with_name("wasm")
 				.long("wasm")
 				.help("Also build wasm in release mode")
@@ -199,6 +204,9 @@ impl Builder {
 
 		if APP.is_present("release") {
 			build_command.arg("--release");
+		}
+		if APP.is_present("verbose") {
+			build_command.arg("--verbose");
 		}
 
 		if let Some(target) = APP.value_of("target") {
