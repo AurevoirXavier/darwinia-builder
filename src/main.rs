@@ -3,17 +3,24 @@ extern crate colored;
 extern crate dirs;
 #[macro_use]
 extern crate lazy_static;
+extern crate reqwest;
 
 // --- std ---
 use std::{
 	env, fmt,
 	fs::{self, File, OpenOptions},
 	io::{self, Read, Write},
+	path::Path,
 	process::{Command, Stdio},
 };
 // --- external ---
 use clap::{App, Arg, ArgMatches};
 use colored::Colorize;
+use indicatif::{ProgressBar, ProgressStyle};
+use reqwest::{
+	header::{CONTENT_LENGTH, RANGE},
+	ClientBuilder, Url,
+};
 
 const STABLE_TOOLCHAIN_VERSION: &'static str = "2019-07-14";
 
@@ -520,19 +527,22 @@ impl EnvVar {
 
 				dir.push("linux-x86_64");
 
-				if dir.exists() {
-					println!(
-						"{} {}",
-						"[✓] linux-x86_64:".green(),
-						dir.to_string_lossy().cyan()
-					);
-				} else {
+				if !dir.exists() {
 					eprintln!(
 						"{} {}",
 						"[✗] linux-x86_64:".red(),
-						"https://github.com/AurevoirXavier/darwinia-builder/releases/download/linux-x86_64/linux-x86_64.tar.gz".red()
+						"automatically downlaod from: https://github.com/AurevoirXavier/darwinia-builder/releases/download/linux-x86_64/linux-x86_64.tar.gz".red()
 					);
+
+					download("https://github.com/AurevoirXavier/darwinia-builder/releases/download/linux-x86_64/linux-x86_64.tar.gz");
+					run(Command::new("tar").args(&["xf", "linux-x86_64.tar.gz"])).unwrap();
 				}
+
+				println!(
+					"{} {}",
+					"[✓] linux-x86_64:".green(),
+					dir.to_string_lossy().cyan()
+				);
 			}
 			"i686-pc-windows-msvc" => unimplemented!(),
 			"x86_64-pc-windows-msvc" => unimplemented!(),
@@ -588,4 +598,68 @@ fn run(command: &mut Command) -> Result<String, io::Error> {
 fn run_with_output(command: &mut Command) -> Result<(), io::Error> {
 	command.stdout(Stdio::piped()).spawn()?.wait_with_output()?;
 	Ok(())
+}
+
+struct DownloadProgress<R> {
+	inner: R,
+	progress_bar: ProgressBar,
+}
+
+impl<R: Read> Read for DownloadProgress<R> {
+	fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+		self.inner.read(buf).map(|n| {
+			self.progress_bar.inc(n as u64);
+			n
+		})
+	}
+}
+
+fn download(url: &str) {
+	let url = Url::parse(url).unwrap();
+	let client = ClientBuilder::new()
+		.danger_accept_invalid_certs(true)
+		.danger_accept_invalid_hostnames(true)
+		.gzip(true)
+		.use_sys_proxy()
+		.build()
+		.unwrap();
+	let total_size = client
+		.get(url.as_str())
+		.send()
+		.unwrap()
+		.headers()
+		.get(CONTENT_LENGTH)
+		.unwrap()
+		.to_str()
+		.unwrap()
+		.parse()
+		.unwrap();
+	let mut req = client.get(url.as_str());
+
+	let pb = ProgressBar::new(total_size);
+	pb.set_style(
+		ProgressStyle::default_bar()
+			.template("{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {bytes}/{total_bytes} ({eta})")
+			.progress_chars("=> ")
+	);
+
+	let file = Path::new(url.path_segments().unwrap().last().unwrap());
+	if file.exists() {
+		let size = file.metadata().unwrap().len() - 1;
+
+		req = req.header(RANGE, format!("bytes={}-", size));
+		pb.inc(size);
+	}
+
+	let mut source = DownloadProgress {
+		progress_bar: pb,
+		inner: req.send().unwrap(),
+	};
+	let mut dest = fs::OpenOptions::new()
+		.create(true)
+		.append(true)
+		.open(&file)
+		.unwrap();
+	io::copy(&mut source, &mut dest).unwrap();
+	dest.sync_all().unwrap();
 }
