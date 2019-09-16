@@ -439,7 +439,7 @@ impl EnvVar {
 				fs::create_dir(&config_file_path).unwrap();
 			}
 
-			config_file_path.push(".config");
+			config_file_path.push("config");
 			if config_file_path.is_file() {
 				let mut config_file_handler = OpenOptions::new()
 					.read(true)
@@ -504,11 +504,11 @@ impl EnvVar {
 							"[✗] config file:".red(),
 							"will be set automatically".red()
 						);
-					}
 
-					config_file_handler.write("\n".as_bytes()).unwrap();
-					config_file_handler.write(config_file.as_bytes()).unwrap();
-					config_file_handler.sync_all().unwrap();
+						config_file_handler.write("\n".as_bytes()).unwrap();
+						config_file_handler.write(config_file.as_bytes()).unwrap();
+						config_file_handler.sync_all().unwrap();
+					}
 
 					println!(
 						"{} {}",
