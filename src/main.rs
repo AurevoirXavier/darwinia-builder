@@ -529,7 +529,7 @@ impl EnvVar {
 					eprintln!(
 						"{} {}",
 						"[✗] linux-x86_64:".red(),
-						"https://github.com/AurevoirXavier/darwinia-builder/releases/download/v0.2.0-alpha/linux-x86_64.tar.gz".red()
+						"https://github.com/AurevoirXavier/darwinia-builder/releases/download/linux-x86_64/linux-x86_64.tar.gz".red()
 					);
 				}
 			}
