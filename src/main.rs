@@ -531,7 +531,7 @@ impl EnvVar {
 					eprintln!(
 						"{} {}",
 						"[✗] linux-x86_64:".red(),
-						"automatically downlaod from: https://github.com/AurevoirXavier/darwinia-builder/releases/download/linux-x86_64/linux-x86_64.tar.gz".red()
+						"automatically download from: https://github.com/AurevoirXavier/darwinia-builder/releases/download/linux-x86_64/linux-x86_64.tar.gz".red()
 					);
 
 					download("https://github.com/AurevoirXavier/darwinia-builder/releases/download/linux-x86_64/linux-x86_64.tar.gz");
