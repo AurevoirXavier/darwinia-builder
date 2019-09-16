@@ -38,56 +38,55 @@ lazy_static! {
 
 		format!("{}-{}", arch, os)
 	};
-	static ref APP: ArgMatches<'static> = App::new("darwinia-builder")
-		.author("Xavier Lau <c.estlavie@icloud.com>")
-		.about("build tool for darwinia")
-		.version("0.4.0-alpha")
-		.arg(
-			Arg::with_name("host")
-				.help("The HOST to build")
-				.long("host")
-				.value_name("HOST")
-				.possible_values(&[
-					"i686-apple-darwin",
-					"x86_64-apple-darwin",
-					"i686-unknown-linux-gnu",
-					"x86_64-unknown-linux-gnu",
-					"i686-pc-windows-msvc",
-					"x86_64-pc-windows-msvc",
-				])
-		)
-		.arg(
-			Arg::with_name("target")
-				.help("The TARGET to run")
-				.long("target")
-				.value_name("TARGET")
-				.possible_values(&[
-					"arm-unknown-linux-gnueabi",
-					"armv7-unknown-linux-gnueabihf",
-					"i686-apple-darwin",
-					"x86_64-apple-darwin",
-					"i686-unknown-linux-gnu",
-					"x86_64-unknown-linux-gnu",
-					"i686-pc-windows-msvc",
-					"x86_64-pc-windows-msvc",
-				])
-		)
-		.arg(
-			Arg::with_name("release")
-				.long("release")
-				.help("Build darwinia in release mode")
-		)
-		.arg(
-			Arg::with_name("verbose")
-				.long("verbose")
-				.help("Use verbose output (-vv very verbose/build.rs output) while building darwinia")
-		)
-		.arg(
-			Arg::with_name("wasm")
-				.long("wasm")
-				.help("Also build wasm in release mode")
-		)
-		.get_matches();
+	static ref APP: ArgMatches<'static> =
+		App::new("darwinia-builder")
+			.author("Xavier Lau <c.estlavie@icloud.com>")
+			.about("build tool for darwinia")
+			.version("0.4.0-alpha")
+			.arg(
+				Arg::with_name("host")
+					.help("The HOST to build")
+					.long("host")
+					.value_name("HOST")
+					.possible_values(&[
+						"i686-apple-darwin",
+						"x86_64-apple-darwin",
+						"i686-unknown-linux-gnu",
+						"x86_64-unknown-linux-gnu",
+						"i686-pc-windows-msvc",
+						"x86_64-pc-windows-msvc",
+					])
+			)
+			.arg(
+				Arg::with_name("target")
+					.help("The TARGET to run")
+					.long("target")
+					.value_name("TARGET")
+					.possible_values(&[
+						"arm-unknown-linux-gnueabi",
+						"armv7-unknown-linux-gnueabihf",
+						"i686-apple-darwin",
+						"x86_64-apple-darwin",
+						"i686-unknown-linux-gnu",
+						"x86_64-unknown-linux-gnu",
+						"i686-pc-windows-msvc",
+						"x86_64-pc-windows-msvc",
+					])
+			)
+			.arg(
+				Arg::with_name("release")
+					.long("release")
+					.help("Build darwinia in release mode")
+			)
+			.arg(Arg::with_name("verbose").long("verbose").help(
+				"Use verbose output (-vv very verbose/build.rs output) while building darwinia"
+			))
+			.arg(
+				Arg::with_name("wasm")
+					.long("wasm")
+					.help("Also build wasm in release mode")
+			)
+			.get_matches();
 }
 
 fn main() {
@@ -175,18 +174,20 @@ impl Builder {
 			env::set_current_dir(&wasm_path)?;
 		}
 
-		env::set_var("CARGO_INCREMENTAL", "0");
-
-		run_with_output(Command::new("cargo").args(&[
-			&format!("+{}", self.tool.toolchain),
-			"rustc",
-			"--release",
-			"--target",
-			"wasm32-unknown-unknown",
-			"--",
-			"-C",
-			"link-arg=--export-table",
-		]))?;
+		run_with_output(
+			Command::new("cargo")
+				.args(&[
+					&format!("+{}", self.tool.toolchain),
+					"rustc",
+					"--release",
+					"--target",
+					"wasm32-unknown-unknown",
+					"--",
+					"-C",
+					"link-arg=--export-table",
+				])
+				.env("CARGO_INCREMENTAL", "0"),
+		)?;
 
 		run(Command::new("wasm-gc").args(&[
 			"target/wasm32-unknown-unknown/release/node_runtime.wasm",
@@ -210,15 +211,15 @@ impl Builder {
 		}
 
 		if let Some(target) = APP.value_of("target") {
-			env::set_var("CARGO_INCREMENTAL", "1");
-			env::set_var(
+			build_command.env("CARGO_INCREMENTAL", "1");
+			build_command.env(
 				"TARGET_CC",
 				self.env_var.target_cc.splitn(2, ' ').next().unwrap(),
 			);
-			env::set_var("SYSROOT", &self.env_var.sysroot);
-			env::set_var("OPENSSL_INCLUDE_DIR", &self.env_var.openssl_include_dir);
-			env::set_var("OPENSSL_LIB_DIR", &self.env_var.openssl_lib_dir);
-			env::set_var("ROCKSDB_LIB_DIR", &self.env_var.rocksdb_lib_dir);
+			build_command.env("SYSROOT", &self.env_var.sysroot);
+			build_command.env("OPENSSL_INCLUDE_DIR", &self.env_var.openssl_include_dir);
+			build_command.env("OPENSSL_LIB_DIR", &self.env_var.openssl_lib_dir);
+			build_command.env("ROCKSDB_LIB_DIR", &self.env_var.rocksdb_lib_dir);
 
 			build_command.args(&[
 				"--target",
@@ -230,16 +231,6 @@ impl Builder {
 		}
 
 		run_with_output(&mut build_command)?;
-
-		if APP.is_present("target") {
-			env::remove_var("CARGO_INCREMENTAL");
-			env::remove_var("TARGET_CC");
-			env::remove_var("SYSROOT");
-			env::remove_var("OPENSSL_INCLUDE_DIR");
-			env::remove_var("OPENSSL_LIB_DIR");
-			env::remove_var("ROCKSDB_LIB_DIR");
-		}
-
 		Ok(())
 	}
 }
@@ -350,7 +341,9 @@ impl Tool {
 					for (target, target_installed) in [
 						(&tool.run_target, run_target_installed),
 						(&tool.wasm_target, wasm_target_installed),
-					].iter() {
+					]
+					.iter()
+					{
 						if !target_installed {
 							eprintln!("{} {}", "[✗] target:".red(), target.red());
 
