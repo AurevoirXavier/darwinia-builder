@@ -42,7 +42,7 @@ lazy_static! {
 		App::new("darwinia-builder")
 			.author("Xavier Lau <c.estlavie@icloud.com>")
 			.about("build tool for darwinia")
-			.version("0.4.0-alpha")
+			.version("0.5.0-alpha")
 			.arg(
 				Arg::with_name("host")
 					.help("The HOST to build")
@@ -131,7 +131,6 @@ impl Builder {
 					rocksdb_lib_dir,
 				},
 		} = self;
-
 		if APP.is_present("target") {
 			![
 				rustup,
@@ -188,7 +187,6 @@ impl Builder {
 				])
 				.env("CARGO_INCREMENTAL", "0"),
 		)?;
-
 		run(Command::new("wasm-gc").args(&[
 			"target/wasm32-unknown-unknown/release/node_runtime.wasm",
 			"target/wasm32-unknown-unknown/release/node_runtime.compact.wasm",
@@ -209,7 +207,6 @@ impl Builder {
 		if APP.is_present("verbose") {
 			build_command.arg("--verbose");
 		}
-
 		if let Some(target) = APP.value_of("target") {
 			build_command.env("CARGO_INCREMENTAL", "1");
 			build_command.env(
@@ -231,6 +228,7 @@ impl Builder {
 		}
 
 		run_with_output(&mut build_command)?;
+
 		Ok(())
 	}
 }
