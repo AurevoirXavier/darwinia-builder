@@ -532,15 +532,22 @@ impl EnvVar {
 							"download failed:".red(),
 							e.to_string().as_str().red()
 						);
-					}
-					run(Command::new("tar").args(&["xf", "linux-x86_64.tar.gz"])).unwrap();
-				}
+					} else {
+						run(Command::new("tar").args(&["xf", "linux-x86_64.tar.gz"])).unwrap();
 
-				println!(
-					"{} {}",
-					"[✓] linux-x86_64:".green(),
-					dir.to_string_lossy().cyan()
-				);
+						println!(
+							"{} {}",
+							"[✓] linux-x86_64:".green(),
+							dir.to_string_lossy().cyan()
+						);
+					}
+				} else {
+					println!(
+						"{} {}",
+						"[✓] linux-x86_64:".green(),
+						dir.to_string_lossy().cyan()
+					);
+				}
 			}
 			"i686-pc-windows-msvc" => unimplemented!(),
 			"x86_64-pc-windows-msvc" => unimplemented!(),
