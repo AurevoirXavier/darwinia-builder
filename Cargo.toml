@@ -3,6 +3,7 @@ name = "darwinia-builder"
 version = "0.7.1"
 authors = ["Xavier Lau <c.estlavie@icloud.com>"]
 edition = "2018"
+license = "MIT/Apache-2.0"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
