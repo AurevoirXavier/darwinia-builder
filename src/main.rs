@@ -128,8 +128,8 @@ impl Builder {
 					cargo,
 					toolchain,
 					wasm_target,
-					wasm_gc,
 					run_target,
+					wasm_gc,
 				},
 			env_var:
 				EnvVar {
@@ -141,14 +141,12 @@ impl Builder {
 					rocksdb_lib_dir,
 				},
 		} = self;
+
+		let essential_check = ![rustup, cargo, toolchain, wasm_target, wasm_gc, run_target]
+			.iter()
+			.any(|&s| s.is_empty());
 		if APP.is_present("target") {
-			![
-				rustup,
-				cargo,
-				toolchain,
-				wasm_target,
-				wasm_gc,
-				run_target,
+			let cross_compile_check = ![
 				config_file,
 				target_cc,
 				sysroot,
@@ -157,11 +155,11 @@ impl Builder {
 				rocksdb_lib_dir,
 			]
 			.iter()
-			.any(|&s| s.is_empty())
+			.any(|&s| s.is_empty());
+
+			essential_check && cross_compile_check
 		} else {
-			![rustup, cargo, toolchain, wasm_target, wasm_gc, run_target]
-				.iter()
-				.any(|&s| s.is_empty())
+			essential_check
 		}
 	}
 
@@ -285,8 +283,8 @@ struct Tool {
 	cargo: String,
 	toolchain: String,
 	wasm_target: String,
-	wasm_gc: String,
 	run_target: String,
+	wasm_gc: String,
 }
 
 impl Tool {
@@ -297,8 +295,8 @@ impl Tool {
 			cargo: String::new(),
 			toolchain: format!("nightly-{}-{}", STABLE_TOOLCHAIN_VERSION, host),
 			wasm_target: String::from("wasm32-unknown-unknown"),
-			wasm_gc: String::new(),
 			run_target: APP.value_of("target").unwrap_or(host).to_owned(),
+			wasm_gc: String::new(),
 		};
 
 		match run(Command::new("rustup").arg("--version")) {
@@ -372,17 +370,11 @@ impl Tool {
 				{
 					if let Err(e) = run(Command::new("wasm-gc").arg("--help")) {
 						if e.kind() == io::ErrorKind::NotFound {
-							eprintln!(
-								"{} {}",
-								"[✗] wasm-gc:".red(),
-								WASM_GC.red()
-							);
+							eprintln!("{} {}", "[✗] wasm-gc:".red(), WASM_GC.red());
 
-							run_with_output(Command::new("cargo").args(&[
-								"install",
-								"--git",
-								WASM_GC,
-							]))
+							run_with_output(
+								Command::new("cargo").args(&["install", "--git", WASM_GC]),
+							)
 							.unwrap();
 						} else {
 							panic!("{}", e);
@@ -395,11 +387,7 @@ impl Tool {
 			}
 			Err(e) => {
 				if e.kind() == io::ErrorKind::NotFound {
-					eprintln!(
-						"{} {}",
-						"[✗] rustup:".red(),
-						RUSTUP.red()
-					);
+					eprintln!("{} {}", "[✗] rustup:".red(), RUSTUP.red());
 				} else {
 					panic!("{}", e);
 				}
@@ -539,7 +527,11 @@ impl EnvVar {
 					);
 
 					if let Err(e) = download(LINUX_86_64_DEPS) {
-						println!("{} {}", "download failed:".red(), e.to_string().as_str().red());
+						println!(
+							"{} {}",
+							"download failed:".red(),
+							e.to_string().as_str().red()
+						);
 					}
 					run(Command::new("tar").args(&["xf", "linux-x86_64.tar.gz"])).unwrap();
 				}
