@@ -23,6 +23,9 @@ use reqwest::{
 };
 
 const STABLE_TOOLCHAIN_VERSION: &'static str = "2019-07-14";
+const LINUX_86_64_DEPS: &'static str = "https://github.com/AurevoirXavier/darwinia-builder/releases/download/linux-x86_64/linux-x86_64.tar.gz";
+const RUSTUP: &'static str = "https://www.rust-lang.org/tools/install";
+const WASM_GC: &'static str = "https://github.com/alexcrichton/wasm-gc";
 
 lazy_static! {
 	static ref HOST: String = {
@@ -372,13 +375,13 @@ impl Tool {
 							eprintln!(
 								"{} {}",
 								"[✗] wasm-gc:".red(),
-								"https://github.com/alexcrichton/wasm-gc".red()
+								WASM_GC.red()
 							);
 
 							run_with_output(Command::new("cargo").args(&[
 								"install",
 								"--git",
-								"https://github.com/alexcrichton/wasm-gc",
+								WASM_GC,
 							]))
 							.unwrap();
 						} else {
@@ -386,7 +389,7 @@ impl Tool {
 						}
 					}
 
-					tool.wasm_gc = String::from("https://github.com/alexcrichton/wasm-gc");
+					tool.wasm_gc = String::from(WASM_GC);
 					println!("{} {}", "[✓] wasm-gc:".green(), tool.wasm_gc.cyan());
 				}
 			}
@@ -395,7 +398,7 @@ impl Tool {
 					eprintln!(
 						"{} {}",
 						"[✗] rustup:".red(),
-						"https://www.rust-lang.org/tools/install".red()
+						RUSTUP.red()
 					);
 				} else {
 					panic!("{}", e);
@@ -529,12 +532,15 @@ impl EnvVar {
 
 				if !dir.exists() {
 					eprintln!(
-						"{} {}",
+						"{} {} {}",
 						"[✗] linux-x86_64:".red(),
-						"automatically download from: https://github.com/AurevoirXavier/darwinia-builder/releases/download/linux-x86_64/linux-x86_64.tar.gz".red()
+						"automatically download from:".red(),
+						LINUX_86_64_DEPS.red(),
 					);
 
-					download("https://github.com/AurevoirXavier/darwinia-builder/releases/download/linux-x86_64/linux-x86_64.tar.gz");
+					if let Err(e) = download(LINUX_86_64_DEPS) {
+						println!("{} {}", "download failed:".red(), e.to_string().as_str().red());
+					}
 					run(Command::new("tar").args(&["xf", "linux-x86_64.tar.gz"])).unwrap();
 				}
 
@@ -614,19 +620,17 @@ impl<R: Read> Read for DownloadProgress<R> {
 	}
 }
 
-fn download(url: &str) {
+fn download(url: &str) -> Result<(), reqwest::Error> {
 	let url = Url::parse(url).unwrap();
 	let client = ClientBuilder::new()
 		.danger_accept_invalid_certs(true)
 		.danger_accept_invalid_hostnames(true)
 		.gzip(true)
 		.use_sys_proxy()
-		.build()
-		.unwrap();
+		.build()?;
 	let total_size = client
 		.get(url.as_str())
-		.send()
-		.unwrap()
+		.send()?
 		.headers()
 		.get(CONTENT_LENGTH)
 		.unwrap()
@@ -662,4 +666,6 @@ fn download(url: &str) {
 		.unwrap();
 	io::copy(&mut source, &mut dest).unwrap();
 	dest.sync_all().unwrap();
+
+	Ok(())
 }
