@@ -1,6 +1,6 @@
 [package]
 name = "darwinia-builder"
-version = "0.7.0"
+version = "0.7.1"
 authors = ["Xavier Lau <c.estlavie@icloud.com>"]
 edition = "2018"
 
@@ -14,3 +14,4 @@ fs_extra = "*"
 indicatif = "*"
 lazy_static = "*"
 reqwest = "*"
+toml = "*"
