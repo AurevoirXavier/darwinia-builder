@@ -127,8 +127,8 @@ impl Builder {
 					rustup,
 					cargo,
 					toolchain,
-					wasm_target,
 					run_target,
+					wasm_target,
 					wasm_gc,
 				},
 			env_var:
@@ -282,8 +282,8 @@ struct Tool {
 	rustup: String,
 	cargo: String,
 	toolchain: String,
-	wasm_target: String,
 	run_target: String,
+	wasm_target: String,
 	wasm_gc: String,
 }
 
@@ -331,8 +331,8 @@ impl Tool {
 						&tool.toolchain,
 					]))
 					.unwrap();
-					let mut wasm_target_installed = false;
 					let mut run_target_installed = false;
+					let mut wasm_target_installed = false;
 
 					for line in target_list.lines() {
 						if line.contains("(installed)") || line.contains("(default)") {
@@ -527,7 +527,7 @@ impl EnvVar {
 					);
 
 					if let Err(e) = download(LINUX_86_64_DEPS) {
-						println!(
+						eprintln!(
 							"{} {}",
 							"download failed:".red(),
 							e.to_string().as_str().red()
