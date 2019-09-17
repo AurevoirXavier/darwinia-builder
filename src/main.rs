@@ -1,6 +1,8 @@
 extern crate clap;
 extern crate colored;
 extern crate dirs;
+extern crate fs_extra;
+extern crate indicatif;
 #[macro_use]
 extern crate lazy_static;
 extern crate reqwest;
@@ -10,6 +12,7 @@ use std::{
 	env, fmt,
 	fs::{self, File, OpenOptions},
 	io::{self, Read, Write},
+	os::unix::fs::OpenOptionsExt,
 	path::Path,
 	process::{Command, Stdio},
 };
@@ -88,14 +91,19 @@ lazy_static! {
 					.long("release")
 					.help("Build darwinia in release mode")
 			)
-			.arg(Arg::with_name("verbose").long("verbose").help(
-				"Use verbose output (-vv very verbose/build.rs output) while building darwinia"
-			))
 			.arg(
 				Arg::with_name("wasm")
 					.long("wasm")
 					.help("Also build wasm in release mode")
 			)
+			.arg(
+				Arg::with_name("pack")
+					.long("pack")
+					.help("Pack darwinia and LD_LIBRARY into darwinia.tar.gz")
+			)
+			.arg(Arg::with_name("verbose").long("verbose").help(
+				"Use verbose output (-vv very verbose/build.rs output) while building darwinia"
+			))
 			.get_matches();
 }
 
@@ -103,6 +111,9 @@ fn main() {
 	let builder = Builder::new();
 	if builder.check() {
 		builder.build().unwrap();
+		if APP.is_present("pack") {
+			builder.pack().unwrap();
+		}
 	}
 }
 
@@ -135,6 +146,7 @@ impl Builder {
 				EnvVar {
 					config_file,
 					target_cc,
+					deps,
 					sysroot,
 					openssl_include_dir,
 					openssl_lib_dir,
@@ -149,6 +161,7 @@ impl Builder {
 			let cross_compile_check = ![
 				config_file,
 				target_cc,
+				deps,
 				sysroot,
 				openssl_include_dir,
 				openssl_lib_dir,
@@ -163,11 +176,74 @@ impl Builder {
 		}
 	}
 
-	fn build(self) -> Result<(), io::Error> {
+	fn build(&self) -> Result<(), io::Error> {
 		if APP.is_present("wasm") {
 			self.build_wasm()?;
 		}
 		self.build_darwinia()?;
+
+		Ok(())
+	}
+
+	fn pack(&self) -> Result<(), io::Error> {
+		let root_path = env::current_dir()?;
+		let target_dir = {
+			let mut p = root_path.clone();
+			p.push("target");
+
+			p
+		};
+		let package_name = env!("CARGO_PKG_NAME");
+
+		let mut target_path = target_dir.clone();
+		target_path.push(&self.tool.run_target);
+		if APP.is_present("release") {
+			target_path.push("release");
+		} else {
+			target_path.push("debug");
+		}
+		target_path.push(package_name);
+
+		let mut ld_library_dir = root_path.clone();
+		ld_library_dir.push(&self.env_var.deps);
+		ld_library_dir.push("ld-library");
+
+		let mut pack_path = target_dir.clone();
+		pack_path.push(package_name);
+		let pack_dir = pack_path.clone();
+		if !pack_path.is_dir() {
+			fs::create_dir(&pack_path)?;
+		}
+		pack_path.push(package_name);
+
+		{
+			fs::copy(&target_path, &pack_path)?;
+
+			let mut copy_options = fs_extra::dir::CopyOptions::new();
+			copy_options.overwrite = true;
+			fs_extra::dir::copy(&ld_library_dir, &pack_dir, &copy_options).unwrap();
+		}
+
+		{
+			let mut run_script = fs::OpenOptions::new()
+				.create(true)
+				.truncate(true)
+				.write(true)
+				.mode(0o755)
+				.open(&format!("{}/run.sh", pack_dir.to_string_lossy()))?;
+			run_script.write(
+				format!(
+					"#!/usr/bin/env bash\nexport LD_LIBRARY_PATH=$LD_LIBRARY:$(pwd)/ld-library\n./{}",
+					package_name
+				)
+				.as_bytes(),
+			)?;
+			run_script.sync_all()?;
+		}
+
+		env::set_current_dir(&target_dir)?;
+		run(Command::new("tar").args(&["zcf", &format!("{}.tar.gz", package_name), package_name]))?;
+		env::set_current_dir(&root_path)?;
 
 		Ok(())
 	}
@@ -402,6 +478,7 @@ impl Tool {
 struct EnvVar {
 	config_file: String,
 	target_cc: String,
+	deps: String,
 	sysroot: String,
 	openssl_include_dir: String,
 	openssl_lib_dir: String,
@@ -412,6 +489,7 @@ impl EnvVar {
 	fn new() -> Self {
 		let mut config_file = String::new();
 		let mut target_cc = String::new();
+		let mut deps = String::new();
 		let mut sysroot = String::new();
 		let mut openssl_include_dir = String::new();
 		let mut openssl_lib_dir = String::new();
@@ -422,6 +500,7 @@ impl EnvVar {
 			return Self {
 				config_file,
 				target_cc,
+				deps,
 				sysroot,
 				openssl_include_dir,
 				openssl_lib_dir,
@@ -521,7 +600,7 @@ impl EnvVar {
 				if !dir.exists() {
 					eprintln!(
 						"{} {} {}",
-						"[✗] linux-x86_64:".red(),
+						"[✗] deps:".red(),
 						"automatically download from:".red(),
 						LINUX_86_64_DEPS.red(),
 					);
@@ -535,18 +614,12 @@ impl EnvVar {
 					} else {
 						run(Command::new("tar").args(&["xf", "linux-x86_64.tar.gz"])).unwrap();
 
-						println!(
-							"{} {}",
-							"[✓] linux-x86_64:".green(),
-							dir.to_string_lossy().cyan()
-						);
+						deps = dir.to_string_lossy().to_string();
+						println!("{} {}", "[✓] deps:".green(), deps.cyan());
 					}
 				} else {
-					println!(
-						"{} {}",
-						"[✓] linux-x86_64:".green(),
-						dir.to_string_lossy().cyan()
-					);
+					deps = dir.to_string_lossy().to_string();
+					println!("{} {}", "[✓] deps:".green(), deps.cyan());
 				}
 			}
 			"i686-pc-windows-msvc" => unimplemented!(),
@@ -569,6 +642,7 @@ impl EnvVar {
 				dir.push(*folder);
 				if dir.as_path().is_dir() {
 					**v = dir.to_string_lossy().to_string();
+
 					println!(
 						"{} {}{} {}",
 						"[✓]".green(),
@@ -585,6 +659,7 @@ impl EnvVar {
 		Self {
 			config_file,
 			target_cc,
+			deps,
 			sysroot,
 			openssl_include_dir,
 			openssl_lib_dir,
