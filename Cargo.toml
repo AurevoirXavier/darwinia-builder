@@ -1,6 +1,6 @@
 [package]
 name = "darwinia-builder"
-version = "0.6.0"
+version = "0.7.0"
 authors = ["Xavier Lau <c.estlavie@icloud.com>"]
 edition = "2018"
 
