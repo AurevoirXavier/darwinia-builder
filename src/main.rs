@@ -6,6 +6,7 @@ extern crate indicatif;
 #[macro_use]
 extern crate lazy_static;
 extern crate reqwest;
+extern crate toml;
 
 // --- std ---
 use std::{
@@ -55,7 +56,7 @@ lazy_static! {
 		App::new("darwinia-builder")
 			.author("Xavier Lau <c.estlavie@icloud.com>")
 			.about("build tool for darwinia")
-			.version("0.7.0-alpha")
+			.version("0.7.1-alpha")
 			.arg(
 				Arg::with_name("host")
 					.help("The HOST to build")
@@ -99,7 +100,7 @@ lazy_static! {
 			.arg(
 				Arg::with_name("pack")
 					.long("pack")
-					.help("Pack darwinia and LD_LIBRARY into darwinia.tar.gz")
+					.help("Pack darwinia and LD_LIBRARY into darwinia.tar.gz (ONLY pack for UNIX)")
 			)
 			.arg(Arg::with_name("verbose").long("verbose").help(
 				"Use verbose output (-vv very verbose/build.rs output) while building darwinia"
@@ -193,7 +194,18 @@ impl Builder {
 
 			p
 		};
-		let package_name = env!("CARGO_PKG_NAME");
+		let package_name = {
+			let mut cargo_toml = fs::File::open("Cargo.toml")?;
+			let mut config = String::new();
+			cargo_toml.read_to_string(&mut config)?;
+
+			let config = config.parse::<toml::Value>().unwrap();
+			let config = config.as_table().unwrap();
+			let package = config.get("package").unwrap();
+			let package = package.as_table().unwrap();
+
+			package.get("name").unwrap().as_str().unwrap().to_owned()
+		};
 
 		let mut target_path = target_dir.clone();
 		target_path.push(&self.tool.run_target);
@@ -202,26 +214,29 @@ impl Builder {
 		} else {
 			target_path.push("debug");
 		}
-		target_path.push(package_name);
+		target_path.push(&package_name);
 
 		let mut ld_library_dir = root_path.clone();
 		ld_library_dir.push(&self.env_var.deps);
 		ld_library_dir.push("ld-library");
 
 		let mut pack_path = target_dir.clone();
-		pack_path.push(package_name);
+		pack_path.push(&format!("{}-{}", self.tool.run_target, package_name));
 		let pack_dir = pack_path.clone();
 		if !pack_path.is_dir() {
 			fs::create_dir(&pack_path)?;
 		}
-		pack_path.push(package_name);
 
 		{
+			pack_path.push(&package_name);
 			fs::copy(&target_path, &pack_path)?;
 
 			let mut copy_options = fs_extra::dir::CopyOptions::new();
 			copy_options.overwrite = true;
 			fs_extra::dir::copy(&ld_library_dir, &pack_dir, &copy_options).unwrap();
+
+			drop(target_path);
+			drop(ld_library_dir);
 		}
 
 		{
@@ -234,7 +249,7 @@ impl Builder {
 			run_script.write(
 				format!(
 					"#!/usr/bin/env bash\nexport LD_LIBRARY_PATH=$LD_LIBRARY:$(pwd)/ld-library\n./{}",
-					package_name
+					&package_name
 				)
 				.as_bytes(),
 			)?;
@@ -242,7 +257,11 @@ impl Builder {
 		}
 
 		env::set_current_dir(&target_dir)?;
-		run(Command::new("tar").args(&["zcf", &format!("{}.tar.gz", package_name), package_name]))?;
+		run(Command::new("tar").args(&[
+			"zcf",
+			&format!("{}-{}.tar.gz", self.tool.run_target, &package_name),
+			&format!("{}-{}", self.tool.run_target, package_name),
+		]))?;
 		env::set_current_dir(&root_path)?;
 
 		Ok(())
