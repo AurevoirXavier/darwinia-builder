@@ -199,6 +199,7 @@ impl Builder {
 	}
 
 	fn pack(&self) -> Result<(), io::Error> {
+		let is_windows = self.tool.run_target.contains("windows");
 		let root_path = env::current_dir()?;
 		let target_dir = {
 			let mut p = root_path.clone();
@@ -226,7 +227,11 @@ impl Builder {
 		} else {
 			target_path.push("debug");
 		}
-		target_path.push(&package_name);
+		if is_windows {
+			target_path.push(&format!("{}.exe", &package_name));
+		} else {
+			target_path.push(&package_name);
+		}
 
 		let mut ld_library_dir = root_path.clone();
 		ld_library_dir.push(&self.env_var.deps);
@@ -240,7 +245,11 @@ impl Builder {
 		}
 
 		{
-			pack_path.push(&package_name);
+			if is_windows {
+				pack_path.push(&format!("{}.exe", &package_name));
+			} else {
+				pack_path.push(&package_name);
+			}
 			fs::copy(&target_path, &pack_path)?;
 
 			let mut copy_options = fs_extra::dir::CopyOptions::new();
@@ -251,7 +260,7 @@ impl Builder {
 			drop(ld_library_dir);
 		}
 
-		{
+		if !is_windows {
 			let mut run_script = fs::OpenOptions::new()
 				.create(true)
 				.truncate(true)
