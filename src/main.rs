@@ -21,10 +21,7 @@ use std::{
 use clap::{App, Arg, ArgMatches};
 use colored::Colorize;
 use indicatif::{ProgressBar, ProgressStyle};
-use reqwest::{
-	header::{CONTENT_LENGTH, RANGE},
-	ClientBuilder, Url,
-};
+use reqwest::{header::CONTENT_LENGTH, ClientBuilder, Url};
 
 const STABLE_TOOLCHAIN_VERSION: &'static str = "2019-07-14";
 
@@ -837,7 +834,7 @@ fn download(url: &Url) -> Result<(), reqwest::Error> {
 		.unwrap()
 		.parse()
 		.unwrap();
-	let mut req = client.get(url.as_str());
+	let req = client.get(url.as_str());
 
 	let pb = ProgressBar::new(total_size);
 	pb.set_style(
@@ -848,21 +845,14 @@ fn download(url: &Url) -> Result<(), reqwest::Error> {
 
 	let file = Path::new(url.path_segments().unwrap().last().unwrap());
 	if file.exists() {
-		let size = file.metadata().unwrap().len() - 1;
-
-		req = req.header(RANGE, format!("bytes={}-", size));
-		pb.inc(size);
+		fs::remove_file(file).unwrap();
 	}
 
 	let mut source = DownloadProgress {
 		progress_bar: pb,
 		inner: req.send().unwrap(),
 	};
-	let mut dest = fs::OpenOptions::new()
-		.create(true)
-		.append(true)
-		.open(&file)
-		.unwrap();
+	let mut dest = File::create(file).unwrap();
 	io::copy(&mut source, &mut dest).unwrap();
 	dest.sync_all().unwrap();
 
