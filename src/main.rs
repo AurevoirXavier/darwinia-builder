@@ -27,9 +27,12 @@ use reqwest::{
 };
 
 const STABLE_TOOLCHAIN_VERSION: &'static str = "2019-07-14";
-const LINUX_86_64_DEPS: &'static str = "https://github.com/AurevoirXavier/darwinia-builder/releases/download/linux-x86_64/linux-x86_64.tar.gz";
+
 const RUSTUP: &'static str = "https://www.rust-lang.org/tools/install";
 const WASM_GC: &'static str = "https://github.com/alexcrichton/wasm-gc";
+
+const LINUX_86_64_DEPS: &'static str = "https://github.com/AurevoirXavier/darwinia-builder/releases/download/linux-x86_64/linux-x86_64.tar.gz";
+const WINDOWS_86_64_DEPS: &'static str = "https://github.com/AurevoirXavier/darwinia-builder/releases/download/windows-x86_64/windows-x86_64.tar.gz";
 
 lazy_static! {
 	static ref HOST: String = {
@@ -67,8 +70,8 @@ lazy_static! {
 						"x86_64-apple-darwin",
 						"i686-unknown-linux-gnu",
 						"x86_64-unknown-linux-gnu",
-						"i686-pc-windows-msvc",
-						"x86_64-pc-windows-msvc",
+						"i686-pc-windows-gnu",
+						"x86_64-pc-windows-gnu",
 					])
 			)
 			.arg(
@@ -83,8 +86,8 @@ lazy_static! {
 						"x86_64-apple-darwin",
 						"i686-unknown-linux-gnu",
 						"x86_64-unknown-linux-gnu",
-						"i686-pc-windows-msvc",
-						"x86_64-pc-windows-msvc",
+						"i686-pc-windows-gnu",
+						"x86_64-pc-windows-gnu",
 					])
 			)
 			.arg(
@@ -159,17 +162,26 @@ impl Builder {
 			.iter()
 			.any(|&s| s.is_empty());
 		if APP.is_present("target") {
-			let cross_compile_check = ![
-				config_file,
-				target_cc,
-				deps,
-				sysroot,
-				openssl_include_dir,
-				openssl_lib_dir,
-				rocksdb_lib_dir,
-			]
-			.iter()
-			.any(|&s| s.is_empty());
+			// we use rust-native-tls,
+			// which will use the operating system TLS framework if available, meaning Windows and macOS.
+			// On Linux, it will use OpenSSL 1.1.
+			let cross_compile_check = if run_target.contains("linux") {
+				![
+					config_file,
+					target_cc,
+					deps,
+					sysroot,
+					openssl_include_dir,
+					openssl_lib_dir,
+					rocksdb_lib_dir,
+				]
+				.iter()
+				.any(|&s| s.is_empty())
+			} else {
+				![config_file, target_cc, deps, rocksdb_lib_dir]
+					.iter()
+					.any(|&s| s.is_empty())
+			};
 
 			essential_check && cross_compile_check
 		} else {
@@ -367,7 +379,7 @@ impl fmt::Display for OS {
 		match self {
 			OS::Linux => write!(f, "unknown-linux-gnu"),
 			OS::macOS => write!(f, "apple-darwin"),
-			OS::Windows => write!(f, "pc-windows-msvc"),
+			OS::Windows => write!(f, "pc-windows-gnu"),
 		}
 	}
 }
@@ -395,98 +407,102 @@ impl Tool {
 		};
 
 		match run(Command::new("rustup").arg("--version")) {
-			Ok(version) => {
-				tool.rustup = version;
-				println!("{} {}", "[✓] rustup:".green(), tool.rustup.cyan());
-				tool.cargo = run(Command::new("cargo").arg("--version")).unwrap();
-				println!("{} {}", "[✓] cargo:".green(), tool.cargo.cyan());
-
-				{
-					let toolchain_list =
-						run(Command::new("rustup").args(&["toolchain", "list"])).unwrap();
-					if !toolchain_list.contains(&tool.toolchain) {
-						eprintln!("{} {}", "[✗] toolchain:".red(), tool.toolchain.red());
-
-						run_with_output(Command::new("rustup").args(&[
-							"toolchain",
-							"install",
-							&tool.toolchain,
-						]))
-						.unwrap();
-					}
-
-					println!("{} {}", "[✓] toolchain:".green(), tool.toolchain.cyan());
-				}
-
-				{
-					let target_list = run(Command::new("rustup").args(&[
-						"target",
-						"list",
-						"--toolchain",
-						&tool.toolchain,
-					]))
-					.unwrap();
-					let mut run_target_installed = false;
-					let mut wasm_target_installed = false;
-
-					for line in target_list.lines() {
-						if line.contains("(installed)") || line.contains("(default)") {
-							if line.contains(&tool.run_target) {
-								run_target_installed = true;
-							} else if line.contains(&tool.wasm_target) {
-								wasm_target_installed = true;
-							}
-						}
-					}
-
-					for (target, target_installed) in [
-						(&tool.run_target, run_target_installed),
-						(&tool.wasm_target, wasm_target_installed),
-					]
-					.iter()
-					{
-						if !target_installed {
-							eprintln!("{} {}", "[✗] target:".red(), target.red());
-
-							run_with_output(Command::new("rustup").args(&[
-								"target",
-								"add",
-								target,
-								"--toolchain",
-								&tool.toolchain,
-							]))
-							.unwrap();
-						}
-
-						println!("{} {}", "[✓] target:".green(), target.cyan());
-					}
-				}
-
-				{
-					if let Err(e) = run(Command::new("wasm-gc").arg("--help")) {
-						if e.kind() == io::ErrorKind::NotFound {
-							eprintln!("{} {}", "[✗] wasm-gc:".red(), WASM_GC.red());
-
-							run_with_output(
-								Command::new("cargo").args(&["install", "--git", WASM_GC]),
-							)
-							.unwrap();
-						} else {
-							panic!("{}", e);
-						}
-					}
-
-					tool.wasm_gc = String::from(WASM_GC);
-					println!("{} {}", "[✓] wasm-gc:".green(), tool.wasm_gc.cyan());
-				}
-			}
+			Ok(version) => tool.rustup = version,
 			Err(e) => {
 				if e.kind() == io::ErrorKind::NotFound {
+					// TODO
+					// if cfg!(target_os = "linux") || cfg!(target_os = "macos") {
+					// run_with_output(&mut Command::new(
+					// "curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh",
+					// ))
+					// .unwrap();
+					// } else {
 					eprintln!("{} {}", "[✗] rustup:".red(), RUSTUP.red());
+				// }
 				} else {
 					panic!("{}", e);
 				}
 			}
+		}
+		println!("{} {}", "[✓] rustup:".green(), tool.rustup.cyan());
+
+		tool.cargo = run(Command::new("cargo").arg("--version")).unwrap();
+		println!("{} {}", "[✓] cargo:".green(), tool.cargo.cyan());
+
+		{
+			let toolchain_list = run(Command::new("rustup").args(&["toolchain", "list"])).unwrap();
+			if !toolchain_list.contains(&tool.toolchain) {
+				eprintln!("{} {}", "[✗] toolchain:".red(), tool.toolchain.red());
+
+				run_with_output(Command::new("rustup").args(&[
+					"toolchain",
+					"install",
+					&tool.toolchain,
+				]))
+				.unwrap();
+			}
+
+			println!("{} {}", "[✓] toolchain:".green(), tool.toolchain.cyan());
+		}
+
+		{
+			let target_list = run(Command::new("rustup").args(&[
+				"target",
+				"list",
+				"--toolchain",
+				&tool.toolchain,
+			]))
+			.unwrap();
+			let mut run_target_installed = false;
+			let mut wasm_target_installed = false;
+
+			for line in target_list.lines() {
+				if line.contains("(installed)") || line.contains("(default)") {
+					if line.contains(&tool.run_target) {
+						run_target_installed = true;
+					} else if line.contains(&tool.wasm_target) {
+						wasm_target_installed = true;
+					}
+				}
+			}
+
+			for (target, target_installed) in [
+				(&tool.run_target, run_target_installed),
+				(&tool.wasm_target, wasm_target_installed),
+			]
+			.iter()
+			{
+				if !target_installed {
+					eprintln!("{} {}", "[✗] target:".red(), target.red());
+
+					run_with_output(Command::new("rustup").args(&[
+						"target",
+						"add",
+						target,
+						"--toolchain",
+						&tool.toolchain,
+					]))
+					.unwrap();
+				}
+
+				println!("{} {}", "[✓] target:".green(), target.cyan());
+			}
+		}
+
+		{
+			if let Err(e) = run(Command::new("wasm-gc").arg("--help")) {
+				if e.kind() == io::ErrorKind::NotFound {
+					eprintln!("{} {}", "[✗] wasm-gc:".red(), WASM_GC.red());
+
+					run_with_output(Command::new("cargo").args(&["install", "--git", WASM_GC]))
+						.unwrap();
+				} else {
+					panic!("{}", e);
+				}
+			}
+
+			tool.wasm_gc = String::from(WASM_GC);
+			println!("{} {}", "[✓] wasm-gc:".green(), tool.wasm_gc.cyan());
 		}
 
 		tool
@@ -550,7 +566,8 @@ impl EnvVar {
 		};
 
 		// TODO
-		match APP.value_of("target").unwrap() {
+		let target = APP.value_of("target").unwrap();
+		match target {
 			"arm-unknown-linux-gnueabi" => unimplemented!(),
 			"armv7-unknown-linux-gnueabihf" => unimplemented!(),
 			"i686-apple-darwin" => unimplemented!(),
@@ -559,6 +576,7 @@ impl EnvVar {
 			"x86_64-unknown-linux-gnu" => {
 				match run(Command::new("x86_64-unknown-linux-gnu-gcc").arg("--version")) {
 					Ok(version) => {
+						// TODO
 						target_cc = version.splitn(2, '\n').next().unwrap().to_owned();
 						config_file = format!(
 							"[target.x86_64-unknown-linux-gnu]\nlinker = \"{}\"",
@@ -573,106 +591,96 @@ impl EnvVar {
 					}
 					Err(e) => {
 						if e.kind() == io::ErrorKind::NotFound {
-							eprintln!(
-								"{} {}",
-								"[✗] x86_64-unknown-linux-gnu-gcc:".red(),
-								"https://github.com/SergioBenitez/homebrew-osxct".red()
-							);
+							// TODO
+							if cfg!(target_os = "macos") {
+								eprintln!(
+									"{} {}",
+									"[✗] x86_64-unknown-linux-gnu-gcc:".red(),
+									"https://github.com/SergioBenitez/homebrew-osxct".red()
+								);
+							}
 						} else {
 							panic!("{}", e);
 						}
 					}
 				}
 
-				{
-					let mut config_unset = true;
-
-					for line in config.lines() {
-						if line.trim() == "[target.x86_64-unknown-linux-gnu]" {
-							config_unset = false;
-						}
-					}
-
-					if config_unset {
-						eprintln!(
-							"{} {}",
-							"[✗] config file:".red(),
-							"will be set automatically".red()
-						);
-
-						if !config.is_empty() {
-							config_file_handler.write("\n\n".as_bytes()).unwrap();
-						}
-						config_file_handler.write(config_file.as_bytes()).unwrap();
-						config_file_handler.sync_all().unwrap();
-					}
-
-					println!(
-						"{} {}",
-						"[✓] config file:".green(),
-						config_file.replace('\n', " ").cyan()
-					);
-				}
+				set_config_file(
+					&config,
+					&mut config_file,
+					&mut config_file_handler,
+					"[target.x86_64-unknown-linux-gnu]",
+				)
+				.unwrap();
 
 				dir.push("linux-x86_64");
-
-				if !dir.exists() {
-					eprintln!(
-						"{} {} {}",
-						"[✗] deps:".red(),
-						"automatically download from:".red(),
-						LINUX_86_64_DEPS.red(),
-					);
-
-					if let Err(e) = download(LINUX_86_64_DEPS) {
-						eprintln!(
-							"{} {}",
-							"download failed:".red(),
-							e.to_string().as_str().red()
-						);
-					} else {
-						run(Command::new("tar").args(&["xf", "linux-x86_64.tar.gz"])).unwrap();
-
-						deps = dir.to_string_lossy().to_string();
-						println!("{} {}", "[✓] deps:".green(), deps.cyan());
-					}
-				} else {
-					deps = dir.to_string_lossy().to_string();
-					println!("{} {}", "[✓] deps:".green(), deps.cyan());
-				}
+				chcek_deps(dir.as_path(), &mut deps, LINUX_86_64_DEPS).unwrap();
 			}
-			"i686-pc-windows-msvc" => unimplemented!(),
-			"x86_64-pc-windows-msvc" => unimplemented!(),
+			"i686-pc-windows-gnu" => unimplemented!(),
+			"x86_64-pc-windows-gnu" => {
+				match run(Command::new("x86_64-w64-mingw32-gcc").arg("--version")) {
+					Ok(version) => {
+						// TODO
+						target_cc = version.splitn(2, '\n').next().unwrap().to_owned();
+						config_file = format!(
+							"[target.x86_64-pc-windows-gnu]\nlinker = \"{}\"",
+							target_cc.splitn(2, ' ').next().unwrap()
+						);
+
+						println!(
+							"{} {}",
+							"[✓] x86_64-w64-mingw32-gcc:".green(),
+							target_cc.cyan()
+						);
+					}
+					Err(e) => {
+						if e.kind() == io::ErrorKind::NotFound {
+							// TODO
+							if cfg!(target_os = "macos") {
+								eprintln!(
+									"{} {}",
+									"[✗] x86_64-w64-mingw32-gcc:".red(),
+									"https://formulae.brew.sh/formula/mingw-w6 and MUST CHECK https://github.com/rust-lang/rust/issues/48272#issuecomment-429596397".red()
+								);
+							}
+						} else {
+							panic!("{}", e);
+						}
+					}
+				}
+
+				set_config_file(
+					&config,
+					&mut config_file,
+					&mut config_file_handler,
+					"[target.x86_64-pc-windows-gnu]",
+				)
+				.unwrap();
+
+				dir.push("windows-x86_64");
+				chcek_deps(dir.as_path(), &mut deps, WINDOWS_86_64_DEPS).unwrap();
+			}
 			_ => unreachable!(),
 		}
 
-		for (k, v, folder) in [
-			("SYSROOT", &mut sysroot, "sysroot"),
-			("OPENSSL_INCLUDE_DIR", &mut openssl_include_dir, "include"),
-			("OPENSSL_LIB_DIR", &mut openssl_lib_dir, "lib/openssl"),
-			("ROCKSDB_LIB_DIR", &mut rocksdb_lib_dir, "lib/rocksdb"),
-		]
-		.iter_mut()
-		{
-			if let Ok(v_) = env::var(*k) {
-				**v = v_;
-			} else {
-				let mut dir = dir.clone();
-				dir.push(*folder);
-				if dir.as_path().is_dir() {
-					**v = dir.to_string_lossy().to_string();
-
-					println!(
-						"{} {}{} {}",
-						"[✓]".green(),
-						(*k).green(),
-						":".green(),
-						v.cyan()
-					);
-				} else {
-					eprintln!("{} {}", "[✗]".red(), (*k).red());
-				}
+		if target.contains("linux") {
+			for (k, v, folder) in [
+				("SYSROOT", &mut sysroot, "sysroot"),
+				("OPENSSL_INCLUDE_DIR", &mut openssl_include_dir, "include"),
+				("OPENSSL_LIB_DIR", &mut openssl_lib_dir, "lib/openssl"),
+				("ROCKSDB_LIB_DIR", &mut rocksdb_lib_dir, "lib/rocksdb"),
+			]
+			.iter_mut()
+			{
+				check_envs(k, v, dir.as_path(), folder);
 			}
+		} else {
+			check_envs(
+				"ROCKSDB_LIB_DIR",
+				&mut rocksdb_lib_dir,
+				dir.as_path(),
+				"lib/rocksdb",
+			);
 		}
 
 		Self {
@@ -699,6 +707,96 @@ fn run_with_output(command: &mut Command) -> Result<(), io::Error> {
 	Ok(())
 }
 
+fn set_config_file(
+	config: &str,
+	config_file: &str,
+	config_file_handler: &mut File,
+	target: &str,
+) -> Result<(), io::Error> {
+	let mut config_unset = true;
+
+	for line in config.lines() {
+		if line.trim() == target {
+			config_unset = false;
+		}
+	}
+
+	if config_unset {
+		eprintln!(
+			"{} {}",
+			"[✗] config file:".red(),
+			"will be set automatically".red()
+		);
+
+		if !config.is_empty() {
+			config_file_handler.write("\n\n".as_bytes())?;
+		}
+		config_file_handler.write(config_file.as_bytes())?;
+		config_file_handler.sync_all()?;
+	}
+
+	println!(
+		"{} {}",
+		"[✓] config file:".green(),
+		config_file.replace('\n', " ").cyan()
+	);
+
+	Ok(())
+}
+
+fn chcek_deps(dir: &Path, deps: &mut String, download_link: &str) -> Result<(), io::Error> {
+	if !dir.exists() {
+		eprintln!(
+			"{} {} {}",
+			"[✗] deps:".red(),
+			"automatically download from:".red(),
+			download_link.red(),
+		);
+
+		let download_link = Url::parse(download_link).unwrap();
+		if let Err(e) = download(&download_link) {
+			eprintln!(
+				"{} {}",
+				"download failed:".red(),
+				e.to_string().as_str().red()
+			);
+		} else {
+			run(Command::new("tar")
+				.args(&["xf", download_link.path_segments().unwrap().last().unwrap()]))?;
+
+			*deps = dir.to_string_lossy().to_string();
+			println!("{} {}", "[✓] deps:".green(), deps.cyan());
+		}
+	} else {
+		*deps = dir.to_string_lossy().to_string();
+		println!("{} {}", "[✓] deps:".green(), deps.cyan());
+	}
+
+	Ok(())
+}
+
+fn check_envs(k: &str, v: &mut String, dir: &Path, folder: &str) {
+	if let Ok(v_) = env::var(k) {
+		*v = v_;
+	} else {
+		let mut dir = dir.clone().to_path_buf();
+		dir.push(folder);
+		if dir.as_path().is_dir() {
+			*v = dir.to_string_lossy().to_string();
+
+			println!(
+				"{} {}{} {}",
+				"[✓]".green(),
+				(*k).green(),
+				":".green(),
+				v.cyan()
+			);
+		} else {
+			eprintln!("{} {}", "[✗]".red(), (*k).red());
+		}
+	}
+}
+
 struct DownloadProgress<R> {
 	inner: R,
 	progress_bar: ProgressBar,
@@ -713,8 +811,7 @@ impl<R: Read> Read for DownloadProgress<R> {
 	}
 }
 
-fn download(url: &str) -> Result<(), reqwest::Error> {
-	let url = Url::parse(url).unwrap();
+fn download(url: &Url) -> Result<(), reqwest::Error> {
 	let client = ClientBuilder::new()
 		.danger_accept_invalid_certs(true)
 		.danger_accept_invalid_hostnames(true)
