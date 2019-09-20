@@ -59,7 +59,7 @@ lazy_static! {
 		App::new("darwinia-builder")
 			.author("Xavier Lau <c.estlavie@icloud.com>")
 			.about("build tool for darwinia")
-			.version("0.7.1-alpha")
+			.version("0.7.2-alpha")
 			.arg(
 				Arg::with_name("host")
 					.help("The HOST to build")
