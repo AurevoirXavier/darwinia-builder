@@ -416,15 +416,7 @@ impl Tool {
 			Ok(version) => tool.rustup = version,
 			Err(e) => {
 				if e.kind() == io::ErrorKind::NotFound {
-					// TODO
-					// if cfg!(target_os = "linux") || cfg!(target_os = "macos") {
-					// run_with_output(&mut Command::new(
-					// "curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh",
-					// ))
-					// .unwrap();
-					// } else {
 					eprintln!("{} {}", "[✗] rustup:".red(), RUSTUP.red());
-				// }
 				} else {
 					panic!("{}", e);
 				}
