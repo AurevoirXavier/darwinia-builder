@@ -25,7 +25,8 @@ use reqwest::{header::CONTENT_LENGTH, ClientBuilder, Url};
 
 const STABLE_TOOLCHAIN_VERSION: &'static str = "2019-07-14";
 
-const RUSTUP: &'static str = "https://www.rust-lang.org/tools/install";
+const RUSTUP_UNIX: &'static str = "curl https://sh.rustup.rs -sSf | sh";
+const RUSTUP_WINDOWS: &'static str = "https://www.rust-lang.org/tools/install";
 const WASM_GC: &'static str = "https://github.com/alexcrichton/wasm-gc";
 
 const LINUX_86_64_DEPS: &'static str = "https://github.com/AurevoirXavier/darwinia-builder/releases/download/linux-x86_64/linux-x86_64.tar.gz";
@@ -52,68 +53,68 @@ lazy_static! {
 
 		format!("{}-{}", arch, os)
 	};
-	static ref APP: ArgMatches<'static> =
-		App::new("darwinia-builder")
-			.author("Xavier Lau <c.estlavie@icloud.com>")
-			.about("build tool for darwinia")
-			.version("0.7.3-alpha")
-			.arg(
-				Arg::with_name("host")
-					.help("The HOST to build")
-					.long("host")
-					.value_name("HOST")
-					.possible_values(&[
-						"i686-apple-darwin",
-						"x86_64-apple-darwin",
-						"i686-unknown-linux-gnu",
-						"x86_64-unknown-linux-gnu",
-						"i686-pc-windows-gnu",
-						"x86_64-pc-windows-gnu",
-					])
-			)
-			.arg(
-				Arg::with_name("target")
-					.help("The TARGET to run")
-					.long("target")
-					.value_name("TARGET")
-					.possible_values(&[
-						"arm-unknown-linux-gnueabi",
-						"armv7-unknown-linux-gnueabihf",
-						"i686-apple-darwin",
-						"x86_64-apple-darwin",
-						"i686-unknown-linux-gnu",
-						"x86_64-unknown-linux-gnu",
-						"i686-pc-windows-gnu",
-						"x86_64-pc-windows-gnu",
-					])
-			)
-			.arg(
-				Arg::with_name("release")
-					.long("release")
-					.help("Build darwinia in release mode")
-			)
-			.arg(
-				Arg::with_name("wasm")
-					.long("wasm")
-					.help("Also build wasm in release mode")
-			)
-			.arg(
-				Arg::with_name("pack")
-					.long("pack")
-					.help("Pack darwinia and LD_LIBRARY into darwinia.tar.gz (ONLY pack for UNIX)")
-			)
-			.arg(Arg::with_name("verbose").long("verbose").help(
-				"Use verbose output (-vv very verbose/build.rs output) while building darwinia"
-			))
-			.get_matches();
+	static ref APP: ArgMatches<'static> = App::new("darwinia-builder")
+		.author("Xavier Lau <c.estlavie@icloud.com>")
+		.about("build tool for substrate")
+		.version("0.7.3-alpha")
+		.arg(
+			Arg::with_name("host")
+				.help("The HOST to build")
+				.long("host")
+				.value_name("HOST")
+				.possible_values(&[
+					"i686-apple-darwin",
+					"x86_64-apple-darwin",
+					"i686-unknown-linux-gnu",
+					"x86_64-unknown-linux-gnu",
+					"i686-pc-windows-gnu",
+					"x86_64-pc-windows-gnu",
+				])
+		)
+		.arg(
+			Arg::with_name("target")
+				.help("The TARGET to run")
+				.long("target")
+				.value_name("TARGET")
+				.possible_values(&[
+					"arm-unknown-linux-gnueabi",
+					"armv7-unknown-linux-gnueabihf",
+					"i686-apple-darwin",
+					"x86_64-apple-darwin",
+					"i686-unknown-linux-gnu",
+					"x86_64-unknown-linux-gnu",
+					"i686-pc-windows-gnu",
+					"x86_64-pc-windows-gnu",
+				])
+		)
+		.arg(
+			Arg::with_name("release")
+				.long("release")
+				.help("Build project in release mode")
+		)
+		.arg(
+			Arg::with_name("wasm")
+				.long("wasm")
+				.help("Also build wasm in release mode")
+		)
+		.arg(Arg::with_name("pack").long("pack").help(
+			"Pack <project-name> and LD_LIBRARY into <project-name>.tar.gz (ONLY works on UNIX)"
+		))
+		.arg(
+			Arg::with_name("verbose")
+				.long("verbose")
+				.help("Use verbose output (-vv very verbose/build.rs output) while building")
+		)
+		.get_matches();
 }
 
 fn main() {
-	let builder = Builder::new();
-	if builder.check() {
-		builder.build().unwrap();
-		if APP.is_present("pack") {
-			builder.pack().unwrap();
+	if let Ok(builder) = Builder::new() {
+		if builder.check() {
+			builder.build().unwrap();
+			if APP.is_present("pack") {
+				builder.pack().unwrap();
+			}
 		}
 	}
 }
@@ -125,11 +126,11 @@ struct Builder {
 }
 
 impl Builder {
-	fn new() -> Self {
-		Self {
-			tool: Tool::new(),
+	fn new() -> Result<Self, io::Error> {
+		Ok(Self {
+			tool: Tool::new()?,
 			env_var: EnvVar::new(),
-		}
+		})
 	}
 
 	fn check(&self) -> bool {
@@ -190,7 +191,7 @@ impl Builder {
 		if APP.is_present("wasm") {
 			self.build_wasm()?;
 		}
-		self.build_darwinia()?;
+		self.build_project()?;
 
 		Ok(())
 	}
@@ -318,7 +319,7 @@ impl Builder {
 		Ok(())
 	}
 
-	fn build_darwinia(&self) -> Result<(), io::Error> {
+	fn build_project(&self) -> Result<(), io::Error> {
 		let mut build_command = Command::new("cargo");
 		build_command.args(&[&format!("+{}", self.tool.toolchain), "rustc"]);
 
@@ -328,8 +329,9 @@ impl Builder {
 		if APP.is_present("verbose") {
 			build_command.arg("--verbose");
 		}
+
+		build_command.env("CARGO_INCREMENTAL", "1");
 		if let Some(target) = APP.value_of("target") {
-			build_command.env("CARGO_INCREMENTAL", "1");
 			build_command.env(
 				"TARGET_CC",
 				self.env_var.target_cc.splitn(2, ' ').next().unwrap(),
@@ -401,7 +403,7 @@ struct Tool {
 }
 
 impl Tool {
-	fn new() -> Self {
+	fn new() -> Result<Self, io::Error> {
 		let host = APP.value_of("host").unwrap_or(HOST.as_str());
 		let mut tool = Self {
 			rustup: String::new(),
@@ -416,13 +418,18 @@ impl Tool {
 			Ok(version) => tool.rustup = version,
 			Err(e) => {
 				if e.kind() == io::ErrorKind::NotFound {
-					eprintln!("{} {}", "[✗] rustup:".red(), RUSTUP.red());
+					let os = if cfg!(target_os = "windows") {
+						RUSTUP_WINDOWS
+					} else {
+						RUSTUP_UNIX
+					};
+					eprintln!("{} {}", "[✗] rustup:".red(), os.red());
+					return Err(e);
 				} else {
 					panic!("{}", e);
 				}
 			}
 		}
-		println!("{} {}", "[✓] rustup:".green(), tool.rustup.cyan());
 
 		tool.cargo = run(Command::new("cargo").arg("--version")).unwrap();
 		println!("{} {}", "[✓] cargo:".green(), tool.cargo.cyan());
@@ -503,7 +510,7 @@ impl Tool {
 			println!("{} {}", "[✓] wasm-gc:".green(), tool.wasm_gc.cyan());
 		}
 
-		tool
+		Ok(tool)
 	}
 }
 
@@ -638,7 +645,7 @@ impl EnvVar {
 								eprintln!(
 									"{} {}",
 									"[✗] x86_64-w64-mingw32-gcc:".red(),
-									"https://formulae.brew.sh/formula/mingw-w6 and MUST CHECK https://github.com/rust-lang/rust/issues/48272#issuecomment-429596397".red()
+									"https://formulae.brew.sh/formula/mingw-w64 and MUST CHECK https://github.com/rust-lang/rust/issues/48272#issuecomment-429596397".red()
 								);
 							}
 						} else {
