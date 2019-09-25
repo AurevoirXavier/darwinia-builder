@@ -622,6 +622,13 @@ impl EnvVar {
 							"[target.x86_64-unknown-linux-gnu]\nlinker = \"{}\"",
 							target_cc.splitn(2, ' ').next().unwrap()
 						);
+						set_config_file(
+							&config,
+							&mut config_file,
+							&mut config_file_handler,
+							"[target.x86_64-unknown-linux-gnu]",
+						)
+						.unwrap();
 
 						println!(
 							"{} {}",
@@ -631,27 +638,20 @@ impl EnvVar {
 					}
 					Err(e) => {
 						if e.kind() == io::ErrorKind::NotFound {
-							// TODO
-							if cfg!(target_os = "macos") {
-								eprintln!(
+							match *HOST_OS {
+								OS::macOS => eprintln!(
 									"{} {}",
 									"[✗] x86_64-unknown-linux-gnu-gcc:".red(),
 									"https://github.com/SergioBenitez/homebrew-osxct".red()
-								);
+								),
+								OS::Windows => (), // TODO
+								_ => unreachable!(),
 							}
 						} else {
 							panic!("{}", e);
 						}
 					}
 				}
-
-				set_config_file(
-					&config,
-					&mut config_file,
-					&mut config_file_handler,
-					"[target.x86_64-unknown-linux-gnu]",
-				)
-				.unwrap();
 
 				dir.push("linux-x86_64");
 				chcek_deps(dir.as_path(), &mut deps, LINUX_86_64_DEPS).unwrap();
@@ -666,6 +666,13 @@ impl EnvVar {
 							"[target.x86_64-pc-windows-gnu]\nlinker = \"{}\"",
 							target_cc.splitn(2, ' ').next().unwrap()
 						);
+						set_config_file(
+							&config,
+							&mut config_file,
+							&mut config_file_handler,
+							"[target.x86_64-pc-windows-gnu]",
+						)
+						.unwrap();
 
 						println!(
 							"{} {}",
@@ -675,27 +682,54 @@ impl EnvVar {
 					}
 					Err(e) => {
 						if e.kind() == io::ErrorKind::NotFound {
-							// TODO
-							if cfg!(target_os = "macos") {
-								eprintln!(
-									"{} {}",
+							match *HOST_OS {
+								// TODO
+								OS::Linux(ref distribution) => match distribution {
+									LinuxDistribution::ArchLinux => eprintln!(
+										"{} {}\n{}\n{}-{}-{}{}\n{}\n{}",
+										"[✗] x86_64-w64-mingw32-gcc:".red(),
+										"pacman -S mingw-w64-gcc".red(),
+										"follow https://github.com/rust-lang/rust/issues/48272#issuecomment-429596397:".red(),
+										"cd ~/.rustup/toolchains/nightly",
+										STABLE_TOOLCHAIN_VERSION,
+										*HOST,
+										"/lib/rustlib/x86_64-pc-windows-gnu/lib",
+										"cp /usr/x86_64-w64-mingw32/lib/*crt2.o ./",
+										"ln -s /usr/x86_64-w64-mingw32/lib/libiphlpapi.a /usr/x86_64-w64-mingw32/lib/libIphlpapi.a"
+									),
+									LinuxDistribution::CentOS => unimplemented!(),
+									LinuxDistribution::Ubuntu => eprintln!(
+										"{} {}\n{}\n{}-{}-{}{}\n{}\n{}",
+										"[✗] x86_64-w64-mingw32-gcc:".red(),
+										"apt-get install mingw-w64".red(),
+										"follow https://github.com/rust-lang/rust/issues/48272#issuecomment-429596397:".red(),
+										"cd ~/.rustup/toolchains/nightly",
+										STABLE_TOOLCHAIN_VERSION,
+										*HOST,
+										"/lib/rustlib/x86_64-pc-windows-gnu/lib",
+										"cp /usr/x86_64-w64-mingw32/lib/*crt2.o ./",
+										"ln -s /usr/x86_64-w64-mingw32/lib/libiphlpapi.a /usr/x86_64-w64-mingw32/lib/libIphlpapi.a"
+									),
+									LinuxDistribution::Unknown => unimplemented!(),
+								},
+								OS::macOS => eprintln!(
+									"{} {}\n{}\n{}-{}-{}{}\n{}",
 									"[✗] x86_64-w64-mingw32-gcc:".red(),
-									"https://formulae.brew.sh/formula/mingw-w64 and MUST CHECK https://github.com/rust-lang/rust/issues/48272#issuecomment-429596397".red()
-								);
+									"brew install mingw-w64".red(),
+									"follow https://github.com/rust-lang/rust/issues/48272#issuecomment-429596397:".red(),
+									"cd ~/.rustup/toolchains/nightly",
+									STABLE_TOOLCHAIN_VERSION,
+									*HOST,
+									"/lib/rustlib/x86_64-pc-windows-gnu/lib",
+									"cp -r /usr/local/Cellar/mingw-w64/6.0.0_2/toolchain-x86_64/x86_64-w64-mingw32/lib/*crt2.o ./",
+								),
+								_ => unreachable!(),
 							}
 						} else {
 							panic!("{}", e);
 						}
 					}
 				}
-
-				set_config_file(
-					&config,
-					&mut config_file,
-					&mut config_file_handler,
-					"[target.x86_64-pc-windows-gnu]",
-				)
-				.unwrap();
 
 				dir.push("windows-x86_64");
 				chcek_deps(dir.as_path(), &mut deps, WINDOWS_86_64_DEPS).unwrap();
