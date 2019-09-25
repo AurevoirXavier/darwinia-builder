@@ -33,26 +33,23 @@ const LINUX_86_64_DEPS: &'static str = "https://github.com/AurevoirXavier/darwin
 const WINDOWS_86_64_DEPS: &'static str = "https://github.com/AurevoirXavier/darwinia-builder/releases/download/windows-x86_64/windows-x86_64.tar.gz";
 
 lazy_static! {
-	static ref HOST: String = {
-		let arch = if cfg!(target_arch = "x86") {
-			Arch::x86
-		} else if cfg!(target_arch = "x86_64") {
-			Arch::x86_64
-		} else {
-			unreachable!("unsupported arch")
-		};
-		let os = if cfg!(target_os = "linux") {
-			OS::Linux
-		} else if cfg!(target_os = "macos") {
-			OS::macOS
-		} else if cfg!(target_os = "windows") {
-			OS::Windows
-		} else {
-			unreachable!("unsupported os")
-		};
-
-		format!("{}-{}", arch, os)
+	static ref HOST_ARCH: Arch = if cfg!(target_arch = "x86") {
+		Arch::x86
+	} else if cfg!(target_arch = "x86_64") {
+		Arch::x86_64
+	} else {
+		unreachable!("unsupported arch")
 	};
+	static ref HOST_OS: OS = if cfg!(target_os = "linux") {
+		OS::Linux(LinuxDistribution::new())
+	} else if cfg!(target_os = "macos") {
+		OS::macOS
+	} else if cfg!(target_os = "windows") {
+		OS::Windows
+	} else {
+		unreachable!("unsupported os")
+	};
+	static ref HOST: String = format!("{}-{}", HOST_ARCH.to_string(), HOST_OS.to_string());
 	static ref APP: ArgMatches<'static> = App::new("darwinia-builder")
 		.author("Xavier Lau <c.estlavie@icloud.com>")
 		.about("build tool for substrate")
@@ -377,17 +374,41 @@ impl fmt::Display for Arch {
 #[allow(non_camel_case_types, unused)]
 #[derive(Debug)]
 enum OS {
+	Linux(LinuxDistribution),
 	macOS,
-	Linux,
 	Windows,
 }
 
 impl fmt::Display for OS {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
 		match self {
-			OS::Linux => write!(f, "unknown-linux-gnu"),
+			OS::Linux(_) => write!(f, "unknown-linux-gnu"),
 			OS::macOS => write!(f, "apple-darwin"),
 			OS::Windows => write!(f, "pc-windows-gnu"),
+		}
+	}
+}
+
+#[derive(Debug)]
+enum LinuxDistribution {
+	ArchLinux,
+	CentOS,
+	Ubuntu,
+	Unknown,
+}
+
+impl LinuxDistribution {
+	fn new() -> Self {
+		let hostnamectl = run(&mut Command::new("hostnamectl")).unwrap();
+		if hostnamectl.contains("Arch") {
+			LinuxDistribution::ArchLinux
+		} else if hostnamectl.contains("Ubuntu") {
+			LinuxDistribution::Ubuntu
+		} else if hostnamectl.contains("CentOS") {
+			// TODO not test
+			LinuxDistribution::CentOS
+		} else {
+			LinuxDistribution::Unknown
 		}
 	}
 }
