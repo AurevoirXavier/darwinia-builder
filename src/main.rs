@@ -33,23 +33,6 @@ const LINUX_86_64_DEPS: &'static str = "https://github.com/AurevoirXavier/darwin
 const WINDOWS_86_64_DEPS: &'static str = "https://github.com/AurevoirXavier/darwinia-builder/releases/download/windows-x86_64/windows-x86_64.tar.gz";
 
 lazy_static! {
-	static ref HOST_ARCH: Arch = if cfg!(target_arch = "x86") {
-		Arch::x86
-	} else if cfg!(target_arch = "x86_64") {
-		Arch::x86_64
-	} else {
-		unreachable!("unsupported arch")
-	};
-	static ref HOST_OS: OS = if cfg!(target_os = "linux") {
-		OS::Linux(LinuxDistribution::new())
-	} else if cfg!(target_os = "macos") {
-		OS::macOS
-	} else if cfg!(target_os = "windows") {
-		OS::Windows
-	} else {
-		unreachable!("unsupported os")
-	};
-	static ref HOST: String = format!("{}-{}", HOST_ARCH.to_string(), HOST_OS.to_string());
 	static ref APP: ArgMatches<'static> = App::new("darwinia-builder")
 		.author("Xavier Lau <c.estlavie@icloud.com>")
 		.about("build tool for substrate")
@@ -103,6 +86,38 @@ lazy_static! {
 				.help("Use verbose output (-vv very verbose/build.rs output) while building")
 		)
 		.get_matches();
+	static ref HOST_ARCH: Arch = if cfg!(target_arch = "x86") {
+		Arch::x86
+	} else if cfg!(target_arch = "x86_64") {
+		Arch::x86_64
+	} else {
+		unreachable!("unsupported arch")
+	};
+	static ref HOST_OS: OS = if cfg!(target_os = "linux") {
+		OS::Linux(LinuxDistribution::new())
+	} else if cfg!(target_os = "macos") {
+		OS::macOS
+	} else if cfg!(target_os = "windows") {
+		OS::Windows
+	} else {
+		unreachable!("unsupported os")
+	};
+	static ref HOST: String = if let Some(host) = APP.value_of("host") {
+		host.to_owned()
+	} else {
+		format!("{}-{}", *HOST_ARCH, *HOST_OS)
+	};
+	static ref IS_CROSS_COMPILE: bool = {
+		if let Some(target) = APP.value_of("target") {
+			if target == HOST.as_str() {
+				false
+			} else {
+				true
+			}
+		} else {
+			false
+		}
+	};
 }
 
 fn main() {
@@ -156,7 +171,7 @@ impl Builder {
 		let essential_check = ![rustup, cargo, toolchain, wasm_target, wasm_gc, run_target]
 			.iter()
 			.any(|&s| s.is_empty());
-		if APP.is_present("target") {
+		if *IS_CROSS_COMPILE {
 			// we use rust-native-tls,
 			// which will use the operating system TLS framework if available, meaning Windows and macOS.
 			// On Linux, it will use OpenSSL 1.1.
@@ -425,13 +440,12 @@ struct Tool {
 
 impl Tool {
 	fn new() -> Result<Self, io::Error> {
-		let host = APP.value_of("host").unwrap_or(HOST.as_str());
 		let mut tool = Self {
 			rustup: String::new(),
 			cargo: String::new(),
-			toolchain: format!("nightly-{}-{}", STABLE_TOOLCHAIN_VERSION, host),
+			toolchain: format!("nightly-{}-{}", STABLE_TOOLCHAIN_VERSION, *HOST),
 			wasm_target: String::from("wasm32-unknown-unknown"),
-			run_target: APP.value_of("target").unwrap_or(host).to_owned(),
+			run_target: APP.value_of("target").unwrap_or(HOST.as_str()).to_owned(),
 			wasm_gc: String::new(),
 		};
 
@@ -557,7 +571,7 @@ impl EnvVar {
 		let mut rocksdb_lib_dir = String::new();
 		let mut dir = env::current_dir().unwrap();
 
-		if !APP.is_present("target") {
+		if !*IS_CROSS_COMPILE {
 			return Self {
 				config_file,
 				target_cc,
