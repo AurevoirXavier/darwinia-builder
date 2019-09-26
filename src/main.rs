@@ -5,6 +5,7 @@ extern crate fs_extra;
 extern crate indicatif;
 #[macro_use]
 extern crate lazy_static;
+extern crate os_info;
 extern crate reqwest;
 extern crate toml;
 
@@ -13,7 +14,6 @@ use std::{
 	env, fmt,
 	fs::{self, File, OpenOptions},
 	io::{self, Read, Write},
-	os::unix::fs::OpenOptionsExt,
 	path::Path,
 	process::{Command, Stdio},
 };
@@ -29,6 +29,7 @@ const RUSTUP_UNIX: &'static str = "curl https://sh.rustup.rs -sSf | sh";
 const RUSTUP_WINDOWS: &'static str = "https://www.rust-lang.org/tools/install";
 const WASM_GC: &'static str = "https://github.com/alexcrichton/wasm-gc";
 
+const DARWIN_86_64_DEPS: &'static str = "https://github.com/AurevoirXavier/darwinia-builder/releases/download/darwin-x86_64/darwin-x86_64.tar.gz";
 const LINUX_86_64_DEPS: &'static str = "https://github.com/AurevoirXavier/darwinia-builder/releases/download/linux-x86_64/linux-x86_64.tar.gz";
 const WINDOWS_86_64_DEPS: &'static str = "https://github.com/AurevoirXavier/darwinia-builder/releases/download/windows-x86_64/windows-x86_64.tar.gz";
 
@@ -43,11 +44,11 @@ lazy_static! {
 				.long("host")
 				.value_name("HOST")
 				.possible_values(&[
-					"i686-apple-darwin",
+					// "i686-apple-darwin",
 					"x86_64-apple-darwin",
-					"i686-unknown-linux-gnu",
+					// "i686-unknown-linux-gnu",
 					"x86_64-unknown-linux-gnu",
-					"i686-pc-windows-gnu",
+					// "i686-pc-windows-gnu",
 					"x86_64-pc-windows-gnu",
 				])
 		)
@@ -57,13 +58,13 @@ lazy_static! {
 				.long("target")
 				.value_name("TARGET")
 				.possible_values(&[
-					"arm-unknown-linux-gnueabi",
-					"armv7-unknown-linux-gnueabihf",
-					"i686-apple-darwin",
+					// "arm-unknown-linux-gnueabi",
+					// "armv7-unknown-linux-gnueabihf",
+					// "i686-apple-darwin",
 					"x86_64-apple-darwin",
-					"i686-unknown-linux-gnu",
+					// "i686-unknown-linux-gnu",
 					"x86_64-unknown-linux-gnu",
-					"i686-pc-windows-gnu",
+					// "i686-pc-windows-gnu",
 					"x86_64-pc-windows-gnu",
 				])
 		)
@@ -93,14 +94,17 @@ lazy_static! {
 	} else {
 		unreachable!("unsupported arch")
 	};
-	static ref HOST_OS: OS = if cfg!(target_os = "linux") {
-		OS::Linux(LinuxDistribution::new())
-	} else if cfg!(target_os = "macos") {
-		OS::macOS
-	} else if cfg!(target_os = "windows") {
-		OS::Windows
-	} else {
-		unreachable!("unsupported os")
+	static ref HOST_OS: OS = {
+		let info = os_info::get();
+		match info.os_type() {
+			os_info::Type::Arch => OS::Linux(LinuxDistribution::ArchLinux),
+			os_info::Type::Centos => OS::Linux(LinuxDistribution::CentOS),
+			os_info::Type::Macos => OS::macOS,
+			os_info::Type::Ubuntu => OS::Linux(LinuxDistribution::Ubuntu),
+			os_info::Type::Windows => OS::Windows,
+			os_info::Type::Linux => OS::Linux(LinuxDistribution::Unknown),
+			_ => unreachable!(),
+		}
 	};
 	static ref HOST: String = if let Some(host) = APP.value_of("host") {
 		host.to_owned()
@@ -121,6 +125,8 @@ lazy_static! {
 }
 
 fn main() {
+	println!("{} {}", "HOST:".green(), HOST.cyan());
+
 	if let Ok(builder) = Builder::new() {
 		if builder.check() {
 			builder.build().unwrap();
@@ -275,7 +281,6 @@ impl Builder {
 				.create(true)
 				.truncate(true)
 				.write(true)
-				.mode(0o755)
 				.open(&format!("{}/run.sh", pack_dir.to_string_lossy()))?;
 			run_script.write(
 				format!(
@@ -333,33 +338,31 @@ impl Builder {
 
 	fn build_project(&self) -> Result<(), io::Error> {
 		let mut build_command = Command::new("cargo");
-		build_command.args(&[&format!("+{}", self.tool.toolchain), "rustc"]);
 
+		build_command.args(&[&format!("+{}", self.tool.toolchain), "rustc"]);
 		if APP.is_present("release") {
 			build_command.arg("--release");
 		}
 		if APP.is_present("verbose") {
 			build_command.arg("--verbose");
 		}
-
 		build_command.env("CARGO_INCREMENTAL", "1");
 		if let Some(target) = APP.value_of("target") {
+			build_command.args(&["--target", target]);
 			build_command.env(
 				"TARGET_CC",
 				self.env_var.target_cc.splitn(2, ' ').next().unwrap(),
 			);
-			build_command.env("SYSROOT", &self.env_var.sysroot);
-			build_command.env("OPENSSL_INCLUDE_DIR", &self.env_var.openssl_include_dir);
-			build_command.env("OPENSSL_LIB_DIR", &self.env_var.openssl_lib_dir);
 			build_command.env("ROCKSDB_LIB_DIR", &self.env_var.rocksdb_lib_dir);
-
-			build_command.args(&[
-				"--target",
-				target,
-				"--",
-				"-C",
-				&format!("link_args=--sysroot={}", self.env_var.sysroot),
-			]);
+			if self.tool.run_target.contains("linux") {
+				build_command.args(&[
+					"--",
+					"-C",
+					&format!("link_args=--sysroot={}", self.env_var.sysroot),
+				]);
+				build_command.env("OPENSSL_INCLUDE_DIR", &self.env_var.openssl_include_dir);
+				build_command.env("OPENSSL_LIB_DIR", &self.env_var.openssl_lib_dir);
+			}
 		}
 
 		run_with_output(&mut build_command)?;
@@ -386,7 +389,7 @@ impl fmt::Display for Arch {
 	}
 }
 
-#[allow(non_camel_case_types, unused)]
+#[allow(non_camel_case_types)]
 #[derive(Debug)]
 enum OS {
 	Linux(LinuxDistribution),
@@ -410,22 +413,6 @@ enum LinuxDistribution {
 	CentOS,
 	Ubuntu,
 	Unknown,
-}
-
-impl LinuxDistribution {
-	fn new() -> Self {
-		let hostnamectl = run(&mut Command::new("hostnamectl")).unwrap();
-		if hostnamectl.contains("Arch") {
-			LinuxDistribution::ArchLinux
-		} else if hostnamectl.contains("Ubuntu") {
-			LinuxDistribution::Ubuntu
-		} else if hostnamectl.contains("CentOS") {
-			// TODO not test
-			LinuxDistribution::CentOS
-		} else {
-			LinuxDistribution::Unknown
-		}
-	}
 }
 
 #[derive(Debug)]
@@ -611,7 +598,47 @@ impl EnvVar {
 			"arm-unknown-linux-gnueabi" => unimplemented!(),
 			"armv7-unknown-linux-gnueabihf" => unimplemented!(),
 			"i686-apple-darwin" => unimplemented!(),
-			"x86_64-apple-darwin" => unimplemented!(),
+			"x86_64-apple-darwin" => {
+				match run(Command::new("x86_64-apple-darwin19-clang").arg("--version")) {
+					Ok(version) => {
+						// TODO
+						target_cc = String::from("x86_64-apple-darwin19-clang");
+						config_file = String::from("[target.x86_64-apple-darwin]\nlinker = \"x86_64-apple-darwin19-clang\"");
+						set_config_file(
+							&config,
+							&mut config_file,
+							&mut config_file_handler,
+							"[target.x86_64-apple-darwin]",
+						)
+						.unwrap();
+
+						println!(
+							"{} {}",
+							"[✓] x86_64-apple-darwin19-clang:".green(),
+							version.split('\n').next().unwrap().cyan()
+						);
+					}
+					Err(e) => {
+						if e.kind() == io::ErrorKind::NotFound {
+							match *HOST_OS {
+								OS::Linux(ref distribution) => match distribution {
+									LinuxDistribution::ArchLinux => (),
+									LinuxDistribution::CentOS => unimplemented!(),
+									LinuxDistribution::Ubuntu => (),
+									LinuxDistribution::Unknown => unimplemented!(),
+								},
+								OS::Windows => (), // TODO
+								_ => unreachable!(),
+							}
+						} else {
+							panic!("{}", e);
+						}
+					}
+				}
+
+				dir.push("darwin-x86_64");
+				chcek_deps(dir.as_path(), &mut deps, DARWIN_86_64_DEPS).unwrap();
+			}
 			"i686-unknown-linux-gnu" => unimplemented!(),
 			"x86_64-unknown-linux-gnu" => {
 				match run(Command::new("x86_64-unknown-linux-gnu-gcc").arg("--version")) {
@@ -642,7 +669,7 @@ impl EnvVar {
 								OS::macOS => eprintln!(
 									"{} {}",
 									"[✗] x86_64-unknown-linux-gnu-gcc:".red(),
-									"https://github.com/SergioBenitez/homebrew-osxct".red()
+									"brew tap SergioBenitez/osxct && brew install x86_64-unknown-linux-gnu".red()
 								),
 								OS::Windows => (), // TODO
 								_ => unreachable!(),
@@ -688,7 +715,7 @@ impl EnvVar {
 									LinuxDistribution::ArchLinux => eprintln!(
 										"{} {}\n{}\n{}-{}-{}{}\n{}\n{}",
 										"[✗] x86_64-w64-mingw32-gcc:".red(),
-										"pacman -S mingw-w64-gcc".red(),
+										"sudo pacman -S mingw-w64-gcc".red(),
 										"follow https://github.com/rust-lang/rust/issues/48272#issuecomment-429596397:".red(),
 										"cd ~/.rustup/toolchains/nightly",
 										STABLE_TOOLCHAIN_VERSION,
@@ -701,7 +728,7 @@ impl EnvVar {
 									LinuxDistribution::Ubuntu => eprintln!(
 										"{} {}\n{}\n{}-{}-{}{}\n{}\n{}",
 										"[✗] x86_64-w64-mingw32-gcc:".red(),
-										"apt-get install mingw-w64".red(),
+										"sudo apt-get install mingw-w64".red(),
 										"follow https://github.com/rust-lang/rust/issues/48272#issuecomment-429596397:".red(),
 										"cd ~/.rustup/toolchains/nightly",
 										STABLE_TOOLCHAIN_VERSION,
@@ -926,3 +953,6 @@ fn download(url: &Url) -> Result<(), reqwest::Error> {
 
 	Ok(())
 }
+
+#[test]
+fn test() {}
