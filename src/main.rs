@@ -637,7 +637,7 @@ impl EnvVar {
 				}
 
 				dir.push("darwin-x86_64");
-				chcek_deps(dir.as_path(), &mut deps, DARWIN_86_64_DEPS).unwrap();
+				check_deps(dir.as_path(), &mut deps, DARWIN_86_64_DEPS).unwrap();
 			}
 			"i686-unknown-linux-gnu" => unimplemented!(),
 			"x86_64-unknown-linux-gnu" => {
@@ -681,7 +681,7 @@ impl EnvVar {
 				}
 
 				dir.push("linux-x86_64");
-				chcek_deps(dir.as_path(), &mut deps, LINUX_86_64_DEPS).unwrap();
+				check_deps(dir.as_path(), &mut deps, LINUX_86_64_DEPS).unwrap();
 			}
 			"i686-pc-windows-gnu" => unimplemented!(),
 			"x86_64-pc-windows-gnu" => {
@@ -759,7 +759,7 @@ impl EnvVar {
 				}
 
 				dir.push("windows-x86_64");
-				chcek_deps(dir.as_path(), &mut deps, WINDOWS_86_64_DEPS).unwrap();
+				check_deps(dir.as_path(), &mut deps, WINDOWS_86_64_DEPS).unwrap();
 			}
 			_ => unreachable!(),
 		}
@@ -845,7 +845,7 @@ fn set_config_file(
 	Ok(())
 }
 
-fn chcek_deps(dir: &Path, deps: &mut String, download_link: &str) -> Result<(), io::Error> {
+fn check_deps(dir: &Path, deps: &mut String, download_link: &str) -> Result<(), io::Error> {
 	if !dir.exists() {
 		eprintln!(
 			"{} {} {}",
