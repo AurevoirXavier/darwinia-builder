@@ -4,14 +4,16 @@ The goal of this project is to simplify the substrate compiling step.
 
 **darwinia builder** is a must have tool for the substrate developer who wants to make a cross compile. It's super easy to use and support a lot of Arch/OS.
 
+### Native Build Support
+- [x] **Linux**
+- [x] **macOS**
+- [x] **Windows**
+
 ### Cross Compile Support
 - [x] from **macOS (x86_64)** to **Linux (x86_64)**
-- [ ] from **macOS (x86_64)** to **Linux (x86)**
 - [x] from **macOS (x86_64)** to **Windows (x86_64)**
-- [ ] from **macOS (x86_64)** to **Windows (x86)**
 - [x] from **Linux (x86_64)** to **macOS (x86_64)**
 - [x] from **Linux (x86_64)** to **Windows (x86_64)**
-- [ ] from **Linux (x86_64)** to **Windows (x86)**
 - [ ] from **Windows** to **Linux**
 - [ ] from **Windows** to **macOS**
 
@@ -25,7 +27,7 @@ The goal of this project is to simplify the substrate compiling step.
    ```sh
 	git clone https://github.com/AurevoirXavier/darwinia-builder.git
 	cd darwinia-builder
-	# only test on lastest nighly version
+	# only test on latest nighly version
 	cargo +nightly build --release 
 	```
    
