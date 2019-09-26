@@ -21,7 +21,7 @@ The goal of this project is to simplify the substrate compiling step.
 macOS example:
 
 ```sh
-cp target/release/darwinia-builder ~/.local/usr/bin
+mv /path/to/darwinia-builder ~/.local/usr/bin
 cd /path/to/substrate-project
 darwinia-builder --release --wasm --target=x86_64-unknown-linux-gnu --pack
 
@@ -30,7 +30,8 @@ ssh root@linux.target.machine
 
 tar xf x86_64-unknown-linux-gnu-substrate-project.tar.gz
 cd x86_64-unknown-linux-gnu-substrate-project
-./run
+chmod u+x run.sh
+./run.sh
 ```
 
 ## screenshot
