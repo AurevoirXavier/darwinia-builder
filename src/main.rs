@@ -28,10 +28,11 @@ const STABLE_TOOLCHAIN_VERSION: &'static str = "2019-07-14";
 const RUSTUP_UNIX: &'static str = "curl https://sh.rustup.rs -sSf | sh";
 const RUSTUP_WINDOWS: &'static str = "https://www.rust-lang.org/tools/install";
 const WASM_GC: &'static str = "https://github.com/alexcrichton/wasm-gc";
+// const OSX_CROSS: &'static str =	"https://github.com/AurevoirXavier/darwinia-builder/releases/download/osxcross/osxcross.tar.gz";
 
-const DARWIN_86_64_DEPS: &'static str = "https://github.com/AurevoirXavier/darwinia-builder/releases/download/darwin-x86_64/darwin-x86_64.tar.gz";
-const LINUX_86_64_DEPS: &'static str = "https://github.com/AurevoirXavier/darwinia-builder/releases/download/linux-x86_64/linux-x86_64.tar.gz";
-const WINDOWS_86_64_DEPS: &'static str = "https://github.com/AurevoirXavier/darwinia-builder/releases/download/windows-x86_64/windows-x86_64.tar.gz";
+const DARWIN_X86_64_DEPS: &'static str = "https://github.com/AurevoirXavier/darwinia-builder/releases/download/darwin-x86_64/darwin-x86_64.tar.gz";
+const LINUX_X86_64_DEPS: &'static str = "https://github.com/AurevoirXavier/darwinia-builder/releases/download/linux-x86_64/linux-x86_64.tar.gz";
+const WINDOWS_X86_64_DEPS: &'static str = "https://github.com/AurevoirXavier/darwinia-builder/releases/download/windows-x86_64/windows-x86_64.tar.gz";
 
 lazy_static! {
 	static ref APP: ArgMatches<'static> = App::new("darwinia-builder")
@@ -637,7 +638,7 @@ impl EnvVar {
 				}
 
 				dir.push("darwin-x86_64");
-				check_deps(dir.as_path(), &mut deps, DARWIN_86_64_DEPS).unwrap();
+				check_deps(dir.as_path(), &mut deps, DARWIN_X86_64_DEPS).unwrap();
 			}
 			"i686-unknown-linux-gnu" => unimplemented!(),
 			"x86_64-unknown-linux-gnu" => {
@@ -681,7 +682,7 @@ impl EnvVar {
 				}
 
 				dir.push("linux-x86_64");
-				check_deps(dir.as_path(), &mut deps, LINUX_86_64_DEPS).unwrap();
+				check_deps(dir.as_path(), &mut deps, LINUX_X86_64_DEPS).unwrap();
 			}
 			"i686-pc-windows-gnu" => unimplemented!(),
 			"x86_64-pc-windows-gnu" => {
@@ -759,7 +760,7 @@ impl EnvVar {
 				}
 
 				dir.push("windows-x86_64");
-				check_deps(dir.as_path(), &mut deps, WINDOWS_86_64_DEPS).unwrap();
+				check_deps(dir.as_path(), &mut deps, WINDOWS_X86_64_DEPS).unwrap();
 			}
 			_ => unreachable!(),
 		}
