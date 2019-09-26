@@ -6,6 +6,10 @@ Cargo.lock
 .vscode
 .DS_Store
 
+osxcross.tar.gz
+MacOSX10.15.sdk.tar.xz
+darwin-x86_64
+darwin-x86_64.tar.gz
 linux-x86_64
 linux-x86_64.tar.gz
 windows-x86_64
