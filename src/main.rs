@@ -596,9 +596,9 @@ impl EnvVar {
 		// TODO
 		let target = APP.value_of("target").unwrap();
 		match target {
-			"arm-unknown-linux-gnueabi" => unimplemented!(),
-			"armv7-unknown-linux-gnueabihf" => unimplemented!(),
-			"i686-apple-darwin" => unimplemented!(),
+			// "arm-unknown-linux-gnueabi" => unimplemented!(),
+			// "armv7-unknown-linux-gnueabihf" => unimplemented!(),
+			// "i686-apple-darwin" => unimplemented!(),
 			"x86_64-apple-darwin" => {
 				match run(Command::new("x86_64-apple-darwin19-clang").arg("--version")) {
 					Ok(version) => {
@@ -628,7 +628,7 @@ impl EnvVar {
 									LinuxDistribution::Ubuntu => (),
 									LinuxDistribution::Unknown => unimplemented!(),
 								},
-								OS::Windows => (), // TODO
+								OS::Windows => unimplemented!(), // TODO
 								_ => unreachable!(),
 							}
 						} else {
@@ -640,7 +640,7 @@ impl EnvVar {
 				dir.push("darwin-x86_64");
 				check_deps(dir.as_path(), &mut deps, DARWIN_X86_64_DEPS).unwrap();
 			}
-			"i686-unknown-linux-gnu" => unimplemented!(),
+			// "i686-unknown-linux-gnu" => unimplemented!(),
 			"x86_64-unknown-linux-gnu" => {
 				match run(Command::new("x86_64-unknown-linux-gnu-gcc").arg("--version")) {
 					Ok(version) => {
@@ -672,7 +672,7 @@ impl EnvVar {
 									"[✗] x86_64-unknown-linux-gnu-gcc:".red(),
 									"brew tap SergioBenitez/osxct && brew install x86_64-unknown-linux-gnu".red()
 								),
-								OS::Windows => (), // TODO
+								OS::Windows => unimplemented!(), // TODO
 								_ => unreachable!(),
 							}
 						} else {
@@ -684,7 +684,7 @@ impl EnvVar {
 				dir.push("linux-x86_64");
 				check_deps(dir.as_path(), &mut deps, LINUX_X86_64_DEPS).unwrap();
 			}
-			"i686-pc-windows-gnu" => unimplemented!(),
+			// "i686-pc-windows-gnu" => unimplemented!(),
 			"x86_64-pc-windows-gnu" => {
 				match run(Command::new("x86_64-w64-mingw32-gcc").arg("--version")) {
 					Ok(version) => {
