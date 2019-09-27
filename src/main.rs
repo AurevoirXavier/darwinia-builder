@@ -27,8 +27,8 @@ const RUSTUP_UNIX: &'static str = "curl https://sh.rustup.rs -sSf | sh";
 const RUSTUP_WINDOWS: &'static str = "https://www.rust-lang.org/tools/install";
 const WASM_GC: &'static str = "https://github.com/alexcrichton/wasm-gc";
 
-const OSX_CROSS: &'static str =
-	"https://github.com/AurevoirXavier/darwinia-builder/releases/download/osxcross/osxcross.tar.gz";
+const MACOS_SDK: &'static str =
+	"https://github.com/AurevoirXavier/darwinia-builder/releases/download/MacOSX10.15.sdk/MacOSX10.15.sdk.tar.xz";
 const DARWIN_X86_64_DEPS: &'static str =
 	"https://github.com/AurevoirXavier/darwinia-builder/releases/download/darwin-x86_64/darwin-x86_64.tar.gz";
 const LINUX_X86_64_DEPS: &'static str =
@@ -620,15 +620,19 @@ impl EnvVar {
 						if e.kind() == io::ErrorKind::NotFound {
 							match *HOST_OS {
 								OS::Linux(_) => eprintln!(
-									"{} {}{} {} {}\n{}\n{}\n{}",
+									"{} {}{}\n{}\n{}\n{} {}\n{}\n{}\n{}\n{}\n{}",
 									"[✗]".red(),
 									LINKER.red(),
 									":".red(),
+									"git clone https://github.com/tpoechtrager/osxcross.git",
+									"cd osxcross",
 									"wget",
-									OSX_CROSS,
-									"tar xf osxcross.tar.gz",
-									"export PATH=$PATH:/path/to/osxcross/target/bin",
-									"export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/path/to/osxcross/target/lib",
+									MACOS_SDK,
+									"mv MacOSX10.15.sdk.tar.xz tarballs",
+									"UNATTENDED=yes ./build.sh",
+									"cd -",
+									"export PATH=$PATH:$(pwd)/osxcross/target/bin",
+									"export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$(pwd)/osxcross/target/lib",
 								),
 								OS::Windows => unimplemented!(), // TODO
 								_ => unreachable!(),
@@ -726,7 +730,7 @@ impl EnvVar {
 								// TODO
 								OS::Linux(ref distribution) => match distribution {
 									LinuxDistribution::ArchLinux => eprintln!(
-										"{} {}{} {}\n{}\n{}{}-{}{}\n{}\n{}",
+										"{} {}{}\n{}\n{}\n{}{}-{}{}\n{}\n{}",
 										"[✗]".red(),
 										LINKER.red(),
 										":".red(),
@@ -737,11 +741,11 @@ impl EnvVar {
 										*HOST,
 										"/lib/rustlib/x86_64-pc-windows-gnu/lib",
 										"cp /usr/x86_64-w64-mingw32/lib/*crt2.o ./",
-										"ln -s /usr/x86_64-w64-mingw32/lib/libiphlpapi.a /usr/x86_64-w64-mingw32/lib/libIphlpapi.a"
+										"sudo ln -s /usr/x86_64-w64-mingw32/lib/libiphlpapi.a /usr/x86_64-w64-mingw32/lib/libIphlpapi.a"
 									),
 									LinuxDistribution::CentOS => unimplemented!(),
 									LinuxDistribution::Ubuntu => eprintln!(
-										"{} {}{} {}\n{}\n{}{}-{}{}\n{}\n{}",
+										"{} {}{}\n{}\n{}\n{}{}-{}{}\n{}\n{}",
 										"[✗]".red(),
 										LINKER.red(),
 										":".red(),
@@ -752,12 +756,12 @@ impl EnvVar {
 										*HOST,
 										"/lib/rustlib/x86_64-pc-windows-gnu/lib",
 										"cp /usr/x86_64-w64-mingw32/lib/*crt2.o ./",
-										"ln -s /usr/x86_64-w64-mingw32/lib/libiphlpapi.a /usr/x86_64-w64-mingw32/lib/libIphlpapi.a"
+										"sudo ln -s /usr/x86_64-w64-mingw32/lib/libiphlpapi.a /usr/x86_64-w64-mingw32/lib/libIphlpapi.a"
 									),
 									LinuxDistribution::Unknown => unimplemented!(),
 								},
 								OS::macOS => eprintln!(
-									"{} {}{} {}\n{}\n{}{}-{}{}\n{}",
+									"{} {}{}\n{}\n{}\n{}{}-{}{}\n{}",
 									"[✗]".red(),
 									LINKER.red(),
 									":".red(),
