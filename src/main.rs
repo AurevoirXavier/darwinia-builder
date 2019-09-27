@@ -23,8 +23,6 @@ use colored::Colorize;
 use indicatif::{ProgressBar, ProgressStyle};
 use reqwest::{header::CONTENT_LENGTH, ClientBuilder, Url};
 
-const STABLE_TOOLCHAIN_VERSION: &'static str = "2019-07-14";
-
 const RUSTUP_UNIX: &'static str = "curl https://sh.rustup.rs -sSf | sh";
 const RUSTUP_WINDOWS: &'static str = "https://www.rust-lang.org/tools/install";
 const WASM_GC: &'static str = "https://github.com/alexcrichton/wasm-gc";
@@ -74,22 +72,30 @@ lazy_static! {
 				])
 		)
 		.arg(
+			Arg::with_name("toolchain")
+				.help("Specify rust toolchain version e.g nightly-2019-07-14")
+				.long("toolchain")
+				.value_name("DATE")
+		)
+		.arg(
 			Arg::with_name("release")
-				.long("release")
 				.help("Build project in release mode")
+				.long("release")
 		)
 		.arg(
 			Arg::with_name("wasm")
-				.long("wasm")
 				.help("Also build wasm in release mode")
+				.long("wasm")
 		)
-		.arg(Arg::with_name("pack").long("pack").help(
-			"Pack <project-name> and LD_LIBRARY into <project-name>.tar.gz (ONLY works on UNIX)"
-		))
+		.arg(
+			Arg::with_name("pack")
+				.help("Pack <project-name> and LD_LIBRARY into <project-name>.tar.gz (ONLY works on UNIX)")
+				.long("pack")
+		)
 		.arg(
 			Arg::with_name("verbose")
-				.long("verbose")
 				.help("Use verbose output (-vv very verbose/build.rs output) while building")
+				.long("verbose")
 		)
 		.get_matches();
 	static ref HOST_ARCH: Arch = if cfg!(target_arch = "x86") {
@@ -116,6 +122,7 @@ lazy_static! {
 	} else {
 		format!("{}-{}", *HOST_ARCH, *HOST_OS)
 	};
+	static ref TOOLCHAIN: &'static str = APP.value_of("toolchain").unwrap_or("nightly");
 	static ref IS_CROSS_COMPILE: bool = {
 		if let Some(target) = APP.value_of("target") {
 			if target == HOST.as_str() {
@@ -427,7 +434,7 @@ impl Tool {
 		let mut tool = Self {
 			rustup: String::new(),
 			cargo: String::new(),
-			toolchain: format!("nightly-{}-{}", STABLE_TOOLCHAIN_VERSION, *HOST),
+			toolchain: format!("{}-{}", *TOOLCHAIN, *HOST),
 			wasm_target: String::from("wasm32-unknown-unknown"),
 			run_target: APP.value_of("target").unwrap_or(HOST.as_str()).to_owned(),
 			wasm_gc: String::new(),
@@ -719,14 +726,14 @@ impl EnvVar {
 								// TODO
 								OS::Linux(ref distribution) => match distribution {
 									LinuxDistribution::ArchLinux => eprintln!(
-										"{} {}{} {}\n{}\n{}-{}-{}{}\n{}\n{}",
+										"{} {}{} {}\n{}\n{}{}-{}{}\n{}\n{}",
 										"[✗]".red(),
 										LINKER.red(),
 										":".red(),
 										"sudo pacman -S mingw-w64-gcc".red(),
 										"follow https://github.com/rust-lang/rust/issues/48272#issuecomment-429596397:".red(),
-										"cd ~/.rustup/toolchains/nightly",
-										STABLE_TOOLCHAIN_VERSION,
+										"cd ~/.rustup/toolchains/",
+										*TOOLCHAIN,
 										*HOST,
 										"/lib/rustlib/x86_64-pc-windows-gnu/lib",
 										"cp /usr/x86_64-w64-mingw32/lib/*crt2.o ./",
@@ -734,14 +741,14 @@ impl EnvVar {
 									),
 									LinuxDistribution::CentOS => unimplemented!(),
 									LinuxDistribution::Ubuntu => eprintln!(
-										"{} {}{} {}\n{}\n{}-{}-{}{}\n{}\n{}",
+										"{} {}{} {}\n{}\n{}{}-{}{}\n{}\n{}",
 										"[✗]".red(),
 										LINKER.red(),
 										":".red(),
 										"sudo apt-get install mingw-w64".red(),
 										"follow https://github.com/rust-lang/rust/issues/48272#issuecomment-429596397:".red(),
-										"cd ~/.rustup/toolchains/nightly",
-										STABLE_TOOLCHAIN_VERSION,
+										"cd ~/.rustup/toolchains/",
+										*TOOLCHAIN,
 										*HOST,
 										"/lib/rustlib/x86_64-pc-windows-gnu/lib",
 										"cp /usr/x86_64-w64-mingw32/lib/*crt2.o ./",
@@ -750,14 +757,14 @@ impl EnvVar {
 									LinuxDistribution::Unknown => unimplemented!(),
 								},
 								OS::macOS => eprintln!(
-									"{} {}{} {}\n{}\n{}-{}-{}{}\n{}",
+									"{} {}{} {}\n{}\n{}{}-{}{}\n{}",
 									"[✗]".red(),
 									LINKER.red(),
 									":".red(),
 									"brew install mingw-w64".red(),
 									"follow https://github.com/rust-lang/rust/issues/48272#issuecomment-429596397:".red(),
-									"cd ~/.rustup/toolchains/nightly",
-									STABLE_TOOLCHAIN_VERSION,
+									"cd ~/.rustup/toolchains/",
+									*TOOLCHAIN,
 									*HOST,
 									"/lib/rustlib/x86_64-pc-windows-gnu/lib",
 									"cp -r /usr/local/Cellar/mingw-w64/6.0.0_2/toolchain-x86_64/x86_64-w64-mingw32/lib/*crt2.o ./",
