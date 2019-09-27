@@ -613,11 +613,15 @@ impl EnvVar {
 						if e.kind() == io::ErrorKind::NotFound {
 							match *HOST_OS {
 								OS::Linux(_) => eprintln!(
-									"{} {}{} {}",
+									"{} {}{} {} {}\n{}\n{}\n{}",
 									"[✗]".red(),
 									LINKER.red(),
 									":".red(),
-									"brew tap SergioBenitez/osxct && brew install x86_64-unknown-linux-gnu".red()
+									"wget",
+									OSX_CROSS,
+									"tar xf osxcross.tar.gz",
+									"mv osxcross /usr/local/opt",
+									"export PATH=$PATH:/usr/local/opt/osxcross/target/bin",
 								),
 								OS::Windows => unimplemented!(), // TODO
 								_ => unreachable!(),
