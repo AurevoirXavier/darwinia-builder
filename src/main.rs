@@ -28,11 +28,15 @@ const STABLE_TOOLCHAIN_VERSION: &'static str = "2019-07-14";
 const RUSTUP_UNIX: &'static str = "curl https://sh.rustup.rs -sSf | sh";
 const RUSTUP_WINDOWS: &'static str = "https://www.rust-lang.org/tools/install";
 const WASM_GC: &'static str = "https://github.com/alexcrichton/wasm-gc";
-// const OSX_CROSS: &'static str =	"https://github.com/AurevoirXavier/darwinia-builder/releases/download/osxcross/osxcross.tar.gz";
 
-const DARWIN_X86_64_DEPS: &'static str = "https://github.com/AurevoirXavier/darwinia-builder/releases/download/darwin-x86_64/darwin-x86_64.tar.gz";
-const LINUX_X86_64_DEPS: &'static str = "https://github.com/AurevoirXavier/darwinia-builder/releases/download/linux-x86_64/linux-x86_64.tar.gz";
-const WINDOWS_X86_64_DEPS: &'static str = "https://github.com/AurevoirXavier/darwinia-builder/releases/download/windows-x86_64/windows-x86_64.tar.gz";
+const OSX_CROSS: &'static str =
+	"https://github.com/AurevoirXavier/darwinia-builder/releases/download/osxcross/osxcross.tar.gz";
+const DARWIN_X86_64_DEPS: &'static str =
+	"https://github.com/AurevoirXavier/darwinia-builder/releases/download/darwin-x86_64/darwin-x86_64.tar.gz";
+const LINUX_X86_64_DEPS: &'static str =
+	"https://github.com/AurevoirXavier/darwinia-builder/releases/download/linux-x86_64/linux-x86_64.tar.gz";
+const WINDOWS_X86_64_DEPS: &'static str =
+	"https://github.com/AurevoirXavier/darwinia-builder/releases/download/windows-x86_64/windows-x86_64.tar.gz";
 
 lazy_static! {
 	static ref APP: ArgMatches<'static> = App::new("darwinia-builder")
@@ -154,15 +158,14 @@ impl Builder {
 
 	fn check(&self) -> bool {
 		let Builder {
-			tool:
-				Tool {
-					rustup,
-					cargo,
-					toolchain,
-					run_target,
-					wasm_target,
-					wasm_gc,
-				},
+			tool: Tool {
+				rustup,
+				cargo,
+				toolchain,
+				run_target,
+				wasm_target,
+				wasm_gc,
+			},
 			env_var:
 				EnvVar {
 					config_file,
@@ -350,17 +353,10 @@ impl Builder {
 		build_command.env("CARGO_INCREMENTAL", "1");
 		if let Some(target) = APP.value_of("target") {
 			build_command.args(&["--target", target]);
-			build_command.env(
-				"TARGET_CC",
-				self.env_var.target_cc.splitn(2, ' ').next().unwrap(),
-			);
+			build_command.env("TARGET_CC", self.env_var.target_cc.splitn(2, ' ').next().unwrap());
 			build_command.env("ROCKSDB_LIB_DIR", &self.env_var.rocksdb_lib_dir);
 			if self.tool.run_target.contains("linux") {
-				build_command.args(&[
-					"--",
-					"-C",
-					&format!("link_args=--sysroot={}", self.env_var.sysroot),
-				]);
+				build_command.args(&["--", "-C", &format!("link_args=--sysroot={}", self.env_var.sysroot)]);
 				build_command.env("OPENSSL_INCLUDE_DIR", &self.env_var.openssl_include_dir);
 				build_command.env("OPENSSL_LIB_DIR", &self.env_var.openssl_lib_dir);
 			}
@@ -462,25 +458,15 @@ impl Tool {
 			if !toolchain_list.contains(&tool.toolchain) {
 				eprintln!("{} {}", "[✗] toolchain:".red(), tool.toolchain.red());
 
-				run_with_output(Command::new("rustup").args(&[
-					"toolchain",
-					"install",
-					&tool.toolchain,
-				]))
-				.unwrap();
+				run_with_output(Command::new("rustup").args(&["toolchain", "install", &tool.toolchain])).unwrap();
 			}
 
 			println!("{} {}", "[✓] toolchain:".green(), tool.toolchain.cyan());
 		}
 
 		{
-			let target_list = run(Command::new("rustup").args(&[
-				"target",
-				"list",
-				"--toolchain",
-				&tool.toolchain,
-			]))
-			.unwrap();
+			let target_list =
+				run(Command::new("rustup").args(&["target", "list", "--toolchain", &tool.toolchain])).unwrap();
 			let mut run_target_installed = false;
 			let mut wasm_target_installed = false;
 
@@ -522,8 +508,7 @@ impl Tool {
 				if e.kind() == io::ErrorKind::NotFound {
 					eprintln!("{} {}", "[✗] wasm-gc:".red(), WASM_GC.red());
 
-					run_with_output(Command::new("cargo").args(&["install", "--git", WASM_GC]))
-						.unwrap();
+					run_with_output(Command::new("cargo").args(&["install", "--git", WASM_GC])).unwrap();
 				} else {
 					panic!("{}", e);
 				}
@@ -600,11 +585,14 @@ impl EnvVar {
 			// "armv7-unknown-linux-gnueabihf" => unimplemented!(),
 			// "i686-apple-darwin" => unimplemented!(),
 			"x86_64-apple-darwin" => {
-				match run(Command::new("x86_64-apple-darwin19-clang").arg("--version")) {
+				const LINKER: &'static str = "x86_64-apple-darwin19-clang";
+
+				match run(Command::new(LINKER).arg("--version")) {
 					Ok(version) => {
 						// TODO
-						target_cc = String::from("x86_64-apple-darwin19-clang");
-						config_file = String::from("[target.x86_64-apple-darwin]\nlinker = \"x86_64-apple-darwin19-clang\"");
+						target_cc = String::from(LINKER);
+						config_file =
+							String::from("[target.x86_64-apple-darwin]\nlinker = \"x86_64-apple-darwin19-clang\"");
 						set_config_file(
 							&config,
 							&mut config_file,
@@ -614,20 +602,23 @@ impl EnvVar {
 						.unwrap();
 
 						println!(
-							"{} {}",
-							"[✓] x86_64-apple-darwin19-clang:".green(),
+							"{} {}{} {}",
+							"[✓]".green(),
+							LINKER.green(),
+							":".green(),
 							version.split('\n').next().unwrap().cyan()
 						);
 					}
 					Err(e) => {
 						if e.kind() == io::ErrorKind::NotFound {
 							match *HOST_OS {
-								OS::Linux(ref distribution) => match distribution {
-									LinuxDistribution::ArchLinux => (),
-									LinuxDistribution::CentOS => unimplemented!(),
-									LinuxDistribution::Ubuntu => (),
-									LinuxDistribution::Unknown => unimplemented!(),
-								},
+								OS::Linux(_) => eprintln!(
+									"{} {}{} {}",
+									"[✗]".red(),
+									LINKER.red(),
+									":".red(),
+									"brew tap SergioBenitez/osxct && brew install x86_64-unknown-linux-gnu".red()
+								),
 								OS::Windows => unimplemented!(), // TODO
 								_ => unreachable!(),
 							}
@@ -642,7 +633,9 @@ impl EnvVar {
 			}
 			// "i686-unknown-linux-gnu" => unimplemented!(),
 			"x86_64-unknown-linux-gnu" => {
-				match run(Command::new("x86_64-unknown-linux-gnu-gcc").arg("--version")) {
+				const LINKER: &'static str = "x86_64-unknown-linux-gnu-gcc";
+
+				match run(Command::new(LINKER).arg("--version")) {
 					Ok(version) => {
 						// TODO
 						target_cc = version.splitn(2, '\n').next().unwrap().to_owned();
@@ -659,8 +652,10 @@ impl EnvVar {
 						.unwrap();
 
 						println!(
-							"{} {}",
-							"[✓] x86_64-unknown-linux-gnu-gcc:".green(),
+							"{} {}{} {}",
+							"[✓]".green(),
+							LINKER.green(),
+							":".green(),
 							target_cc.cyan()
 						);
 					}
@@ -668,8 +663,10 @@ impl EnvVar {
 						if e.kind() == io::ErrorKind::NotFound {
 							match *HOST_OS {
 								OS::macOS => eprintln!(
-									"{} {}",
-									"[✗] x86_64-unknown-linux-gnu-gcc:".red(),
+									"{} {}{} {}",
+									"[✗]".red(),
+									LINKER.red(),
+									":".red(),
 									"brew tap SergioBenitez/osxct && brew install x86_64-unknown-linux-gnu".red()
 								),
 								OS::Windows => unimplemented!(), // TODO
@@ -686,7 +683,9 @@ impl EnvVar {
 			}
 			// "i686-pc-windows-gnu" => unimplemented!(),
 			"x86_64-pc-windows-gnu" => {
-				match run(Command::new("x86_64-w64-mingw32-gcc").arg("--version")) {
+				const LINKER: &'static str = "x86_64-w64-mingw32-gcc";
+
+				match run(Command::new(LINKER).arg("--version")) {
 					Ok(version) => {
 						// TODO
 						target_cc = version.splitn(2, '\n').next().unwrap().to_owned();
@@ -703,8 +702,10 @@ impl EnvVar {
 						.unwrap();
 
 						println!(
-							"{} {}",
-							"[✓] x86_64-w64-mingw32-gcc:".green(),
+							"{} {}{} {}",
+							"[✓]".green(),
+							LINKER.green(),
+							":".green(),
 							target_cc.cyan()
 						);
 					}
@@ -714,8 +715,10 @@ impl EnvVar {
 								// TODO
 								OS::Linux(ref distribution) => match distribution {
 									LinuxDistribution::ArchLinux => eprintln!(
-										"{} {}\n{}\n{}-{}-{}{}\n{}\n{}",
-										"[✗] x86_64-w64-mingw32-gcc:".red(),
+										"{} {}{} {}\n{}\n{}-{}-{}{}\n{}\n{}",
+										"[✗]".red(),
+										LINKER.red(),
+										":".red(),
 										"sudo pacman -S mingw-w64-gcc".red(),
 										"follow https://github.com/rust-lang/rust/issues/48272#issuecomment-429596397:".red(),
 										"cd ~/.rustup/toolchains/nightly",
@@ -727,8 +730,10 @@ impl EnvVar {
 									),
 									LinuxDistribution::CentOS => unimplemented!(),
 									LinuxDistribution::Ubuntu => eprintln!(
-										"{} {}\n{}\n{}-{}-{}{}\n{}\n{}",
-										"[✗] x86_64-w64-mingw32-gcc:".red(),
+										"{} {}{} {}\n{}\n{}-{}-{}{}\n{}\n{}",
+										"[✗]".red(),
+										LINKER.red(),
+										":".red(),
 										"sudo apt-get install mingw-w64".red(),
 										"follow https://github.com/rust-lang/rust/issues/48272#issuecomment-429596397:".red(),
 										"cd ~/.rustup/toolchains/nightly",
@@ -741,8 +746,10 @@ impl EnvVar {
 									LinuxDistribution::Unknown => unimplemented!(),
 								},
 								OS::macOS => eprintln!(
-									"{} {}\n{}\n{}-{}-{}{}\n{}",
-									"[✗] x86_64-w64-mingw32-gcc:".red(),
+									"{} {}{} {}\n{}\n{}-{}-{}{}\n{}",
+									"[✗]".red(),
+									LINKER.red(),
+									":".red(),
 									"brew install mingw-w64".red(),
 									"follow https://github.com/rust-lang/rust/issues/48272#issuecomment-429596397:".red(),
 									"cd ~/.rustup/toolchains/nightly",
@@ -777,12 +784,7 @@ impl EnvVar {
 				check_envs(k, v, dir.as_path(), folder);
 			}
 		} else {
-			check_envs(
-				"ROCKSDB_LIB_DIR",
-				&mut rocksdb_lib_dir,
-				dir.as_path(),
-				"lib/rocksdb",
-			);
+			check_envs("ROCKSDB_LIB_DIR", &mut rocksdb_lib_dir, dir.as_path(), "lib/rocksdb");
 		}
 
 		Self {
@@ -824,11 +826,7 @@ fn set_config_file(
 	}
 
 	if config_unset {
-		eprintln!(
-			"{} {}",
-			"[✗] config file:".red(),
-			"will be set automatically".red()
-		);
+		eprintln!("{} {}", "[✗] config file:".red(), "will be set automatically".red());
 
 		if !config.is_empty() {
 			config_file_handler.write("\n\n".as_bytes())?;
@@ -857,14 +855,9 @@ fn check_deps(dir: &Path, deps: &mut String, download_link: &str) -> Result<(), 
 
 		let download_link = Url::parse(download_link).unwrap();
 		if let Err(e) = download(&download_link) {
-			eprintln!(
-				"{} {}",
-				"download failed:".red(),
-				e.to_string().as_str().red()
-			);
+			eprintln!("{} {}", "download failed:".red(), e.to_string().as_str().red());
 		} else {
-			run(Command::new("tar")
-				.args(&["xf", download_link.path_segments().unwrap().last().unwrap()]))?;
+			run(Command::new("tar").args(&["xf", download_link.path_segments().unwrap().last().unwrap()]))?;
 
 			*deps = dir.to_string_lossy().to_string();
 			println!("{} {}", "[✓] deps:".green(), deps.cyan());
@@ -886,13 +879,7 @@ fn check_envs(k: &str, v: &mut String, dir: &Path, folder: &str) {
 		if dir.as_path().is_dir() {
 			*v = dir.to_string_lossy().to_string();
 
-			println!(
-				"{} {}{} {}",
-				"[✓]".green(),
-				(*k).green(),
-				":".green(),
-				v.cyan()
-			);
+			println!("{} {}{} {}", "[✓]".green(), (*k).green(), ":".green(), v.cyan());
 		} else {
 			eprintln!("{} {}", "[✗]".red(), (*k).red());
 		}
@@ -936,7 +923,7 @@ fn download(url: &Url) -> Result<(), reqwest::Error> {
 	pb.set_style(
 		ProgressStyle::default_bar()
 			.template("{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {bytes}/{total_bytes} ({eta})")
-			.progress_chars("=> ")
+			.progress_chars("=> "),
 	);
 
 	let file = Path::new(url.path_segments().unwrap().last().unwrap());
