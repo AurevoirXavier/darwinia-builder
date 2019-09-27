@@ -35,6 +35,22 @@ The goal of this project is to simplify the substrate compiling step.
 
 ## Usage
 
+### Requirements
+
+Might be (different OS/pkg-manager got different result, welcome PR to make a better requirements list):
+
+- `cmake`
+- `git`
+- `libopenssl`
+- `librocksdb`
+- `llvm`
+- **cross compile toolchain:**
+  - Linux: auto detect, install from pkg-manager
+  - macOS: auto detect, but need to build manually, see the darwinia-builder tips and you might need some deps please follow: https://github.com/tpoechtrager/osxcross
+  - Windows: auto detect, install from pkg-manager
+
+### Example
+
 from **macOS** to **Linux** example:
 
 ```sh
