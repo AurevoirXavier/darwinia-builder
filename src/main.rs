@@ -627,8 +627,8 @@ impl EnvVar {
 									"wget",
 									OSX_CROSS,
 									"tar xf osxcross.tar.gz",
-									"mv osxcross /usr/local/opt",
-									"export PATH=$PATH:/usr/local/opt/osxcross/target/bin",
+									"export PATH=$PATH:/path/to/osxcross/target/bin",
+									"export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/path/to/osxcross/target/lib",
 								),
 								OS::Windows => unimplemented!(), // TODO
 								_ => unreachable!(),
