@@ -78,13 +78,13 @@ lazy_static! {
 				.value_name("DATE")
 		)
 		.arg(
-			Arg::with_name("release")
-				.help("Build project in release mode")
-				.long("release")
+			Arg::with_name("debug")
+				.help("Build project in debug level")
+				.long("debug")
 		)
 		.arg(
 			Arg::with_name("wasm")
-				.help("Also build wasm in release mode")
+				.help("Build wasm in release level")
 				.long("wasm")
 		)
 		.arg(
@@ -345,7 +345,7 @@ impl Builder {
 		let mut build_command = Command::new("cargo");
 
 		build_command.args(&[&format!("+{}", self.tool.toolchain), "rustc"]);
-		if APP.is_present("release") {
+		if !APP.is_present("debug") {
 			build_command.arg("--release");
 		}
 		if APP.is_present("verbose") {
@@ -557,6 +557,8 @@ impl EnvVar {
 			};
 		}
 
+		let host_is_target = APP.value_of("target").unwrap() == *HOST;
+
 		let (mut config_file_handler, config) = {
 			let mut config_file_path = dirs::home_dir().unwrap();
 			config_file_path.push(".cargo");
@@ -586,12 +588,15 @@ impl EnvVar {
 			// "armv7-unknown-linux-gnueabihf" => unimplemented!(),
 			// "i686-apple-darwin" => unimplemented!(),
 			"x86_64-apple-darwin" => {
-				const LINKER: &'static str = "x86_64-apple-darwin19-clang";
+				let linker = if host_is_target {
+					"clang"
+				} else {
+					"x86_64-apple-darwin19-clang"
+				};
 
-				match run(Command::new(LINKER).arg("--version")) {
+				match run(Command::new(linker).arg("--version")) {
 					Ok(version) => {
-						// TODO
-						target_cc = String::from(LINKER);
+						target_cc = String::from(linker);
 						config_file =
 							String::from("[target.x86_64-apple-darwin]\nlinker = \"x86_64-apple-darwin19-clang\"");
 						set_config_file(
@@ -605,7 +610,7 @@ impl EnvVar {
 						println!(
 							"{} {}{} {}",
 							"[✓]".green(),
-							LINKER.green(),
+							linker.green(),
 							":".green(),
 							version.split('\n').next().unwrap().cyan()
 						);
@@ -616,7 +621,7 @@ impl EnvVar {
 								OS::Linux(_) => eprintln!(
 									"{} {}{}\n{}\n{}\n{} {}\n{}\n{}\n{}\n{}\n{}",
 									"[✗]".red(),
-									LINKER.red(),
+									linker.red(),
 									":".red(),
 									"git clone https://github.com/tpoechtrager/osxcross.git",
 									"cd osxcross",
@@ -642,11 +647,14 @@ impl EnvVar {
 			}
 			// "i686-unknown-linux-gnu" => unimplemented!(),
 			"x86_64-unknown-linux-gnu" => {
-				const LINKER: &'static str = "x86_64-unknown-linux-gnu-gcc";
+				let linker = if host_is_target {
+					"gcc"
+				} else {
+					"x86_64-unknown-linux-gnu-gcc"
+				};
 
-				match run(Command::new(LINKER).arg("--version")) {
+				match run(Command::new(linker).arg("--version")) {
 					Ok(version) => {
-						// TODO
 						target_cc = version.splitn(2, '\n').next().unwrap().to_owned();
 						config_file = format!(
 							"[target.x86_64-unknown-linux-gnu]\nlinker = \"{}\"",
@@ -663,7 +671,7 @@ impl EnvVar {
 						println!(
 							"{} {}{} {}",
 							"[✓]".green(),
-							LINKER.green(),
+							linker.green(),
 							":".green(),
 							target_cc.cyan()
 						);
@@ -674,7 +682,7 @@ impl EnvVar {
 								OS::macOS => eprintln!(
 									"{} {}{} {}",
 									"[✗]".red(),
-									LINKER.red(),
+									linker.red(),
 									":".red(),
 									"brew tap SergioBenitez/osxct && brew install x86_64-unknown-linux-gnu".red()
 								),
@@ -692,11 +700,15 @@ impl EnvVar {
 			}
 			// "i686-pc-windows-gnu" => unimplemented!(),
 			"x86_64-pc-windows-gnu" => {
-				const LINKER: &'static str = "x86_64-w64-mingw32-gcc";
+				let linker = if host_is_target {
+					// TODO
+					""
+				} else {
+					"x86_64-w64-mingw32-gcc"
+				};
 
-				match run(Command::new(LINKER).arg("--version")) {
+				match run(Command::new(linker).arg("--version")) {
 					Ok(version) => {
-						// TODO
 						target_cc = version.splitn(2, '\n').next().unwrap().to_owned();
 						config_file = format!(
 							"[target.x86_64-pc-windows-gnu]\nlinker = \"{}\"",
@@ -713,7 +725,7 @@ impl EnvVar {
 						println!(
 							"{} {}{} {}",
 							"[✓]".green(),
-							LINKER.green(),
+							linker.green(),
 							":".green(),
 							target_cc.cyan()
 						);
@@ -726,7 +738,7 @@ impl EnvVar {
 									LinuxDistribution::ArchLinux => eprintln!(
 										"{} {}{}\n{}\n{}\n{}{}-{}{}\n{}\n{}",
 										"[✗]".red(),
-										LINKER.red(),
+										linker.red(),
 										":".red(),
 										"sudo pacman -S mingw-w64-gcc".red(),
 										"follow https://github.com/rust-lang/rust/issues/48272#issuecomment-429596397:".red(),
@@ -741,7 +753,7 @@ impl EnvVar {
 									LinuxDistribution::Ubuntu => eprintln!(
 										"{} {}{}\n{}\n{}\n{}{}-{}{}\n{}\n{}",
 										"[✗]".red(),
-										LINKER.red(),
+										linker.red(),
 										":".red(),
 										"sudo apt-get install mingw-w64".red(),
 										"follow https://github.com/rust-lang/rust/issues/48272#issuecomment-429596397:".red(),
@@ -757,7 +769,7 @@ impl EnvVar {
 								OS::macOS => eprintln!(
 									"{} {}{}\n{}\n{}\n{}{}-{}{}\n{}",
 									"[✗]".red(),
-									LINKER.red(),
+									linker.red(),
 									":".red(),
 									"brew install mingw-w64".red(),
 									"follow https://github.com/rust-lang/rust/issues/48272#issuecomment-429596397:".red(),
