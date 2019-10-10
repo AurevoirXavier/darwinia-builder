@@ -218,10 +218,6 @@ impl Builder {
 	}
 
 	fn pack(&self) -> Result<(), io::Error> {
-		if !*IS_CROSS_COMPILE {
-			return Ok(());
-		}
-
 		let is_windows = self.tool.run_target.contains("windows");
 		let root_path = env::current_dir()?;
 		let target_dir = {
@@ -245,10 +241,10 @@ impl Builder {
 
 		let mut target_path = target_dir.clone();
 		target_path.push(&self.tool.run_target);
-		if APP.is_present("release") {
-			target_path.push("release");
-		} else {
+		if APP.is_present("debug") {
 			target_path.push("debug");
+		} else {
+			target_path.push("release");
 		}
 		if is_windows {
 			target_path.push(&format!("{}.exe", &package_name));
@@ -738,38 +734,40 @@ impl EnvVar {
 								// TODO
 								OS::Linux(ref distribution) => match distribution {
 									LinuxDistribution::ArchLinux => eprintln!(
-										"{} {}{}\n{}\n{}\n{}{}-{}{}\n{}\n{}",
+										"{} {}{}\n{}\n{}\n{}{}-{}{}\n{}\n{}\n{}",
 										"[✗]".red(),
 										linker.red(),
 										":".red(),
-										"sudo pacman -S mingw-w64-gcc".red(),
+										"sudo pacman -S mingw-w64-gcc",
 										"follow https://github.com/rust-lang/rust/issues/48272#issuecomment-429596397:".red(),
 										"cd ~/.rustup/toolchains/",
 										*TOOLCHAIN,
 										*HOST,
 										"/lib/rustlib/x86_64-pc-windows-gnu/lib",
 										"cp /usr/x86_64-w64-mingw32/lib/*crt2.o ./",
-										"sudo ln -s /usr/x86_64-w64-mingw32/lib/libiphlpapi.a /usr/x86_64-w64-mingw32/lib/libIphlpapi.a"
+										"sudo ln -s /usr/x86_64-w64-mingw32/lib/libiphlpapi.a /usr/x86_64-w64-mingw32/lib/libIphlpapi.a",
+										"cd -"
 									),
 									LinuxDistribution::CentOS => unimplemented!(),
 									LinuxDistribution::Ubuntu => eprintln!(
-										"{} {}{}\n{}\n{}\n{}{}-{}{}\n{}\n{}",
+										"{} {}{}\n{}\n{}\n{}{}-{}{}\n{}\n{}\n{}",
 										"[✗]".red(),
 										linker.red(),
 										":".red(),
-										"sudo apt-get install mingw-w64".red(),
+										"sudo apt install mingw-w64",
 										"follow https://github.com/rust-lang/rust/issues/48272#issuecomment-429596397:".red(),
 										"cd ~/.rustup/toolchains/",
 										*TOOLCHAIN,
 										*HOST,
 										"/lib/rustlib/x86_64-pc-windows-gnu/lib",
 										"cp /usr/x86_64-w64-mingw32/lib/*crt2.o ./",
-										"sudo ln -s /usr/x86_64-w64-mingw32/lib/libiphlpapi.a /usr/x86_64-w64-mingw32/lib/libIphlpapi.a"
+										"sudo ln -s /usr/x86_64-w64-mingw32/lib/libiphlpapi.a /usr/x86_64-w64-mingw32/lib/libIphlpapi.a",
+										"cd -"
 									),
 									LinuxDistribution::Unknown => unimplemented!(),
 								},
 								OS::macOS => eprintln!(
-									"{} {}{}\n{}\n{}\n{}{}-{}{}\n{}",
+									"{} {}{}\n{}\n{}\n{}{}-{}{}\n{}\n{}",
 									"[✗]".red(),
 									linker.red(),
 									":".red(),
@@ -780,6 +778,7 @@ impl EnvVar {
 									*HOST,
 									"/lib/rustlib/x86_64-pc-windows-gnu/lib",
 									"cp -r /usr/local/Cellar/mingw-w64/6.0.0_2/toolchain-x86_64/x86_64-w64-mingw32/lib/*crt2.o ./",
+									"cd -"
 								),
 								_ => unreachable!(),
 							}
