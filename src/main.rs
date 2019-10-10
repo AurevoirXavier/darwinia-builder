@@ -1,3 +1,4 @@
+#[macro_use]
 extern crate clap;
 extern crate colored;
 extern crate dirs;
@@ -40,7 +41,7 @@ lazy_static! {
 	static ref APP: ArgMatches<'static> = App::new("darwinia-builder")
 		.author("Xavier Lau <c.estlavie@icloud.com>")
 		.about("build tool for substrate")
-		.version("0.7.6-alpha")
+		.version(crate_version!())
 		.arg(
 			Arg::with_name("host")
 				.help("The HOST to build")
@@ -91,6 +92,7 @@ lazy_static! {
 			Arg::with_name("pack")
 				.help("Pack <project-name> and LD_LIBRARY into <project-name>.tar.gz (ONLY works on UNIX)")
 				.long("pack")
+				.requires("target")
 		)
 		.arg(
 			Arg::with_name("verbose")
