@@ -18,8 +18,9 @@ The goal of this project is to simplify the substrate compiling step.
 - [ ] from **Windows** to **macOS**
 
 ### Tested HOST Version/Distribution
-- macOS Mojave 10.14.6
 - ArchLinux 5.3.1
+- macOS Mojave 10.14.6
+- Ubuntu 18.04 LTS
 
 ## Setup
 
@@ -56,7 +57,7 @@ from **macOS** to **Linux** example:
 ```sh
 mv /path/to/darwinia-builder ~/.local/usr/bin
 cd /path/to/substrate-project
-darwinia-builder --release --wasm --target=x86_64-unknown-linux-gnu --pack
+darwinia-builder --wasm --target=x86_64-unknown-linux-gnu --pack
 
 scp target/x86_64-unknown-linux-gnu-substrate-project.tar.gz root@linux.target.machine:~/
 ssh root@linux.target.machine
