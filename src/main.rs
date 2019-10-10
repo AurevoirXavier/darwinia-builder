@@ -123,17 +123,7 @@ lazy_static! {
 		format!("{}-{}", *HOST_ARCH, *HOST_OS)
 	};
 	static ref TOOLCHAIN: &'static str = APP.value_of("toolchain").unwrap_or("nightly");
-	static ref IS_CROSS_COMPILE: bool = {
-		if let Some(target) = APP.value_of("target") {
-			if target == HOST.as_str() {
-				false
-			} else {
-				true
-			}
-		} else {
-			false
-		}
-	};
+	static ref IS_CROSS_COMPILE: bool = APP.is_present("target");
 }
 
 fn main() {
@@ -226,6 +216,10 @@ impl Builder {
 	}
 
 	fn pack(&self) -> Result<(), io::Error> {
+		if !*IS_CROSS_COMPILE {
+			return Ok(());
+		}
+
 		let is_windows = self.tool.run_target.contains("windows");
 		let root_path = env::current_dir()?;
 		let target_dir = {
