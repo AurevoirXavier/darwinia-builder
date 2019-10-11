@@ -259,9 +259,10 @@ impl Builder {
 		let mut pack_path = target_dir.clone();
 		pack_path.push(&format!("{}-{}", self.tool.run_target, package_name));
 		let pack_dir = pack_path.clone();
-		if !pack_path.is_dir() {
-			fs::create_dir(&pack_path)?;
+		if pack_path.is_dir() {
+			fs::remove_dir_all(&pack_path)?;
 		}
+		fs::create_dir(&pack_path)?;
 
 		{
 			if is_windows {
@@ -299,7 +300,7 @@ impl Builder {
 		run(Command::new("tar").args(&[
 			"zcf",
 			&format!("{}-{}.tar.gz", self.tool.run_target, &package_name),
-			&format!("{}-{}", self.tool.run_target, package_name),
+			&format!("{}-{}", self.tool.run_target, &package_name),
 		]))?;
 		env::set_current_dir(&root_path)?;
 
